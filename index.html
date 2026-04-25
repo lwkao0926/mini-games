@@ -101,8 +101,8 @@ const HOOP_Z=-10, HOOP_Y=3.05, RIM_R=.46;
 const metal=new THREE.MeshStandardMaterial({color:0xc0c0c0,metalness:.85,roughness:.2});
 
 // pole
-scene.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(.065,.065,HOOP_Y+.6,8),metal),
-  {position:new THREE.Vector3(0,(HOOP_Y+.6)/2,HOOP_Z-1.15), castShadow:true}));
+const pole=new THREE.Mesh(new THREE.CylinderGeometry(.065,.065,HOOP_Y+.6,8),metal);
+pole.position.set(0,(HOOP_Y+.6)/2,HOOP_Z-1.15); pole.castShadow=true; scene.add(pole);
 
 // backboard
 const bbMesh=new THREE.Mesh(
@@ -121,8 +121,8 @@ const sq=new THREE.Mesh(
 sq.rotation.x=Math.PI/2; sq.position.set(0,HOOP_Y+.5+.04,HOOP_Z-1.14); scene.add(sq);
 
 // arm
-scene.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.2,8),metal),
-  {position:new THREE.Vector3(0,HOOP_Y+.04,HOOP_Z-.55), rotation:new THREE.Euler(Math.PI/2,0,0)}));
+const arm=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.2,8),metal);
+arm.position.set(0,HOOP_Y+.04,HOOP_Z-.55); arm.rotation.set(Math.PI/2,0,0); scene.add(arm);
 
 // rim
 const rimMesh=new THREE.Mesh(
