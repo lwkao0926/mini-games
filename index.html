@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🏀 3D 投籃</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
+body { background:#0f0f1a; overflow:hidden; font-family:'Microsoft JhengHei',sans-serif; }
+canvas { display:block; }
+#ui {
+  position:fixed; top:16px; left:50%; transform:translateX(-50%);
+  text-align:center; color:#fff; pointer-events:none; user-select:none;
+  width:260px;
+}
+#score { font-size:2.4em; font-weight:900; letter-spacing:.06em; text-shadow:0 0 16px #ff8c00; }
+#attempts { font-size:.82em; opacity:.55; margin-top:3px; }
+#power-wrap {
+  width:100%; height:18px; background:rgba(255,255,255,.15);
+  border-radius:9px; margin:10px auto 0; overflow:hidden;
+  border:1px solid rgba(255,255,255,.1);
+}
+#power-bar {
+  height:100%; width:0%;
+  background:linear-gradient(90deg,#00e676 0%,#ffeb3b 60%,#ff5722 100%);
+  border-radius:9px; transition:width .05s;
+}
+#hint {
+  font-size:.78em; opacity:.5; margin-top:10px; line-height:1.6;
+}
+#popup {
+  position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
+  font-size:clamp(2em,8vw,4em); font-weight:900; pointer-events:none;
+  text-shadow:0 0 30px currentColor; opacity:0;
+}
+#streak {
+  position:fixed; top:16px; right:16px; color:#ffd700;
+  font-size:1.1em; font-weight:700; text-shadow:0 0 10px #ffd700;
+  pointer-events:none; opacity:0; transition:opacity .3s;
+}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="score">🏀 0</div>
+  <div id="attempts">投 0 球</div>
+  <div id="power-wrap"><div id="power-bar"></div></div>
+  <div id="hint">按住蓄力，放開投籃<br>左右滑動調整方向</div>
+</div>
+<div id="popup"></div>
+<div id="streak"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const W=()=>window.innerWidth, H=()=>window.innerHeight;
+
+// ── Renderer ──────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(W(),H());
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ── Scene ─────────────────────────────────────────────────────────────
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0f0f1a);
+scene.fog=new THREE.FogExp2(0x0f0f1a,.028);
+
+const camera=new THREE.PerspectiveCamera(55,W()/H(),.1,80);
+camera.position.set(0,3.8,14);
+camera.lookAt(0,2.5,-8);
+
+// ── Lights ────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff,.45));
+const sun=new THREE.DirectionalLight(0xfff5e0,1.3);
+sun.position.set(6,14,8); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+['near','far','left','right','top','bottom'].forEach((k,i)=>sun.shadow.camera[k]=[.5,60,-20,20,20,-20][i]);
+scene.add(sun);
+scene.add(Object.assign(new THREE.PointLight(0x4466ff,.5,50),{position:{x:-6,y:8,z:6}}));
+
+// ── Floor ─────────────────────────────────────────────────────────────
+const floor=new THREE.Mesh(
+  new THREE.PlaneGeometry(18,40),
+  new THREE.MeshStandardMaterial({color:0x7a3b10,roughness:.9})
+);
+floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+
+// court line helper
+const lmat=new THREE.LineBasicMaterial({color:0xffe082,opacity:.55,transparent:true});
+function courtLine(pts){scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p))),lmat));}
+courtLine([[-9,0.01,18],[9,0.01,18]]);
+courtLine([[-9,0.01,-18],[9,0.01,-18]]);
+courtLine([[-9,0.01,-18],[-9,0.01,18]]);
+courtLine([[9,0.01,-18],[9,0.01,18]]);
+courtLine([[-9,0.01,0],[9,0.01,0]]);
+
+// ── Hoop assembly ─────────────────────────────────────────────────────
+const HOOP_Z=-10, HOOP_Y=3.05, RIM_R=.46;
+const metal=new THREE.MeshStandardMaterial({color:0xc0c0c0,metalness:.85,roughness:.2});
+
+// pole
+scene.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(.065,.065,HOOP_Y+.6,8),metal),
+  {position:new THREE.Vector3(0,(HOOP_Y+.6)/2,HOOP_Z-1.15), castShadow:true}));
+
+// backboard
+const bbMesh=new THREE.Mesh(
+  new THREE.BoxGeometry(1.83,.06,1.07),
+  new THREE.MeshStandardMaterial({color:0xd0eaff,transparent:true,opacity:.75,roughness:.05})
+);
+bbMesh.rotation.x=Math.PI/2;
+bbMesh.position.set(0,HOOP_Y+.5,HOOP_Z-1.15);
+bbMesh.castShadow=true; scene.add(bbMesh);
+
+// inner square
+const sq=new THREE.Mesh(
+  new THREE.BoxGeometry(.59,.04,.45),
+  new THREE.MeshStandardMaterial({color:0xff4400,transparent:true,opacity:.5})
+);
+sq.rotation.x=Math.PI/2; sq.position.set(0,HOOP_Y+.5+.04,HOOP_Z-1.14); scene.add(sq);
+
+// arm
+scene.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.2,8),metal),
+  {position:new THREE.Vector3(0,HOOP_Y+.04,HOOP_Z-.55), rotation:new THREE.Euler(Math.PI/2,0,0)}));
+
+// rim
+const rimMesh=new THREE.Mesh(
+  new THREE.TorusGeometry(RIM_R,.028,12,64),
+  new THREE.MeshStandardMaterial({color:0xff5500,metalness:.8,roughness:.2})
+);
+rimMesh.rotation.x=Math.PI/2;
+rimMesh.position.set(0,HOOP_Y,HOOP_Z);
+rimMesh.castShadow=true; scene.add(rimMesh);
+
+// net
+(function(){
+  const segs=12, h=.46, topR=RIM_R-.02, botR=RIM_R*.3;
+  const nm=new THREE.LineBasicMaterial({color:0xffffff,opacity:.4,transparent:true});
+  for(let i=0;i<segs;i++){
+    const a=(i/segs)*Math.PI*2, a2=((i+1)/segs)*Math.PI*2;
+    [[a,a],[a,a2],[a,a]].forEach(([a1p,a2p],j)=>{
+      if(j===1)return; // skip inner
+    });
+    const v=(a,r,yOff)=>new THREE.Vector3(Math.cos(a)*r,HOOP_Y-yOff,HOOP_Z+Math.sin(a)*r);
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a,topR,0),v(a,botR,h)]),nm));
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a2,topR,0),v(a,botR,h)]),nm));
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a,(.65*topR+.35*botR),h*.45),v(a2,(.65*topR+.35*botR),h*.45)]),nm));
+  }
+})();
+
+// ── Ball ──────────────────────────────────────────────────────────────
+const ballGeo=new THREE.SphereGeometry(.235,32,32);
+const ballMat=new THREE.MeshStandardMaterial({color:0xff6200,roughness:.65,metalness:.05});
+const ball=new THREE.Mesh(ballGeo,ballMat);
+ball.castShadow=true;
+// seams
+[[[0,1,0],[0,-1,0]],[[1,0,0],[-1,0,0]],[[0,0,1],[0,0,-1]]].forEach(([a,b])=>{
+  const A=new THREE.Vector3(...a).multiplyScalar(.236);
+  const B=new THREE.Vector3(...b).multiplyScalar(.236);
+  const pts=new THREE.QuadraticBezierCurve3(A,A.clone().lerp(B,.5).multiplyScalar(1.1),B).getPoints(40);
+  ball.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:0x1a0a00,opacity:.7,transparent:true})));
+});
+scene.add(ball);
+
+// blob shadow
+const blob=new THREE.Mesh(
+  new THREE.CircleGeometry(.2,32),
+  new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.4})
+);
+blob.rotation.x=-Math.PI/2; blob.position.y=.005; scene.add(blob);
+
+// aim dot
+const aim=new THREE.Mesh(
+  new THREE.CircleGeometry(.07,24),
+  new THREE.MeshBasicMaterial({color:0xffeb3b,transparent:true,opacity:.75})
+);
+aim.rotation.x=-Math.PI/2; aim.position.y=.012; scene.add(aim);
+
+// ── Game state ────────────────────────────────────────────────────────
+const BALL_START=new THREE.Vector3(0,1.45,10);
+let scored=0,shots=0,streak=0,inFlight=false,scoredThisShot=false;
+let charging=false,chargeT=0,aimX=0,lastTouchX=0;
+let vel=new THREE.Vector3(),popTimer=0;
+
+const scoreEl=document.getElementById('score');
+const attEl=document.getElementById('attempts');
+const barEl=document.getElementById('power-bar');
+const popupEl=document.getElementById('popup');
+const hintEl=document.getElementById('hint');
+const streakEl=document.getElementById('streak');
+
+function showPopup(txt,col){
+  popupEl.textContent=txt; popupEl.style.color=col; popupEl.style.opacity='1';
+  popTimer=1.5;
+}
+
+// ── Controls ──────────────────────────────────────────────────────────
+// Mouse
+window.addEventListener('mousemove',e=>{ aimX=(e.clientX/W()-.5)*2; });
+window.addEventListener('mousedown',e=>{ if(e.button===0&&!inFlight){charging=true;chargeT=0;} });
+window.addEventListener('mouseup',  e=>{ if(e.button===0&&charging){charging=false;shoot(chargeT);chargeT=0;} });
+
+// Touch
+window.addEventListener('touchstart',e=>{
+  if(inFlight)return;
+  e.preventDefault();
+  lastTouchX=e.touches[0].clientX;
+  aimX=(lastTouchX/W()-.5)*2;
+  charging=true; chargeT=0;
+},{passive:false});
+
+window.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const tx=e.touches[0].clientX;
+  aimX=(tx/W()-.5)*2;
+},{passive:false});
+
+window.addEventListener('touchend',e=>{
+  e.preventDefault();
+  if(!charging)return;
+  charging=false; shoot(chargeT); chargeT=0;
+},{passive:false});
+
+function shoot(t){
+  if(inFlight)return;
+  const power=Math.min(t/1.5,1.0);
+  shots++; attEl.textContent=`投 ${shots} 球`;
+
+  const sideOff=aimX*2.2;
+  const speed=13+power*11;
+  const angle=.85+power*.55;
+
+  const toHoop=new THREE.Vector3(sideOff-BALL_START.x, HOOP_Y-BALL_START.y, HOOP_Z-BALL_START.z).normalize();
+  vel.set(
+    toHoop.x*speed*.6 + sideOff*.12,
+    Math.sin(angle)*speed*.75,
+    toHoop.z*speed*.65
+  );
+
+  ball.position.copy(BALL_START);
+  inFlight=true; scoredThisShot=false;
+  hintEl.style.opacity='0';
+}
+
+// ── Collision ─────────────────────────────────────────────────────────
+function checkScore(){
+  const {x:bx,y:by,z:bz}=ball.position;
+  if(vel.y<0 && by<=HOOP_Y+.05 && by>=HOOP_Y-.3){
+    const d=Math.sqrt((bx)**2+(bz-HOOP_Z)**2);
+    if(d<RIM_R-.08 && !scoredThisShot){
+      scoredThisShot=true;
+      scored++; streak++;
+      scoreEl.textContent=`🏀 ${scored}`;
+      if(streak>=3){
+        showPopup(`🔥×${streak}`,`#ff9900`);
+        streakEl.textContent=`🔥 ${streak} 連中`; streakEl.style.opacity='1';
+      } else {
+        showPopup(streak>1?'NICE! 🔥':'NICE! 🏀','#ffd700');
+        streakEl.style.opacity='0';
+      }
+    }
+  }
+}
+
+// ── Animation ─────────────────────────────────────────────────────────
+const clock=new THREE.Clock();
+let missFlag=false;
+
+function tick(){
+  requestAnimationFrame(tick);
+  const dt=Math.min(clock.getDelta(),.05);
+
+  if(charging){ chargeT+=dt; barEl.style.width=(Math.min(chargeT/1.5,1)*100)+'%'; }
+
+  if(inFlight){
+    vel.y+=(-14)*dt;
+    ball.position.addScaledVector(vel,dt);
+    ball.rotation.x+=vel.z*dt*2.5;
+    ball.rotation.z-=vel.x*dt*2.5;
+
+    const bh=Math.max(ball.position.y,0);
+    blob.position.set(ball.position.x,.005,ball.position.z);
+    blob.scale.setScalar(Math.max(.25,1-bh*.11));
+    blob.material.opacity=Math.max(.04,.4-bh*.04);
+
+    checkScore();
+
+    if((ball.position.y<-1||ball.position.z<-22)&&!missFlag){
+      missFlag=true;
+      if(!scoredThisShot){ streak=0; streakEl.style.opacity='0'; showPopup('MISS','#ff4444'); }
+      setTimeout(reset,700);
+    }
+  } else {
+    const t=clock.getElapsedTime();
+    ball.position.set(BALL_START.x, BALL_START.y+Math.sin(t*1.8)*.05, BALL_START.z);
+    blob.position.set(BALL_START.x,.005,BALL_START.z);
+    blob.scale.setScalar(1); blob.material.opacity=.4;
+    aim.position.set(aimX*2.2,.012,HOOP_Z+.5);
+    aim.visible=true;
+  }
+
+  if(popTimer>0){
+    popTimer-=dt;
+    popupEl.style.opacity=String(Math.max(0,Math.min(1,popTimer/.35)));
+  }
+
+  renderer.render(scene,camera);
+}
+
+function reset(){
+  inFlight=false; scoredThisShot=false; missFlag=false;
+  ball.position.copy(BALL_START); vel.set(0,0,0);
+  barEl.style.width='0%';
+  hintEl.style.opacity='.5';
+}
+
+window.addEventListener('resize',()=>{
+  camera.aspect=W()/H(); camera.updateProjectionMatrix();
+  renderer.setSize(W(),H());
+});
+
+reset(); tick();
+</script>
+</body>
+</html>
