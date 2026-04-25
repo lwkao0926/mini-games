@@ -78,7 +78,7 @@ sun.position.set(6,14,8); sun.castShadow=true;
 sun.shadow.mapSize.set(1024,1024);
 ['near','far','left','right','top','bottom'].forEach((k,i)=>sun.shadow.camera[k]=[.5,60,-20,20,20,-20][i]);
 scene.add(sun);
-scene.add(Object.assign(new THREE.PointLight(0x4466ff,.5,50),{position:{x:-6,y:8,z:6}}));
+const pl=new THREE.PointLight(0x4466ff,.5,50); pl.position.set(-6,8,6); scene.add(pl);
 
 // ── Floor ─────────────────────────────────────────────────────────────
 const floor=new THREE.Mesh(
