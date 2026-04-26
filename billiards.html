@@ -453,10 +453,10 @@ function releaseCharge(){
   shootBtnEl.classList.remove('charging','ready');
   if(aimPower>.04&&!ballsMoving)shoot();else endAim();
 }
-shootBtnEl.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startCharge();});
-shootBtnEl.addEventListener('mouseup',e=>{e.preventDefault();e.stopPropagation();releaseCharge();});
-shootBtnEl.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();startCharge();},{passive:false});
-shootBtnEl.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();releaseCharge();},{passive:false});
+shootBtnEl.addEventListener('mousedown',e=>{e.preventDefault();startCharge();});
+shootBtnEl.addEventListener('mouseup',e=>{e.preventDefault();releaseCharge();});
+shootBtnEl.addEventListener('touchstart',e=>{e.preventDefault();startCharge();},{passive:false});
+shootBtnEl.addEventListener('touchend',e=>{e.preventDefault();releaseCharge();},{passive:false});
 
 function setMode(m){
   mode=m;orbitLast=null;shootCharging=false;
@@ -603,8 +603,8 @@ window.addEventListener('mousemove',e=>onMove(e.clientX,e.clientY));
 window.addEventListener('mouseup',onUp);
 window.addEventListener('touchstart',e=>{if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;e.preventDefault();onDown(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
 window.addEventListener('touchmove',e=>{if(e.target.closest('#spin-cvs,#shoot-btn'))return;e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-window.addEventListener('touchend',e=>{if(e.target.closest('#spin-cvs,#shoot-btn'))return;e.preventDefault();onUp();},{passive:false});
-window.addEventListener('touchcancel',()=>{orbitLast=null;aimDragPrev=null;endAim();});
+window.addEventListener('touchend',e=>{e.preventDefault();onUp();},{passive:false});
+window.addEventListener('touchcancel',()=>{orbitLast=null;shootCharging=false;endAim();});
 
 // ── Audio ────────────────────────────────────────────────────────────
 let _ac=null;
