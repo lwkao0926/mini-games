@@ -334,7 +334,7 @@ function makeBall(def,x,z){
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(BR,32,32),
     new THREE.MeshStandardMaterial({map:makeBallTex(def.n,def.col,def.stripe),roughness:.30,metalness:.06}));
   mesh.castShadow=true;scene.add(mesh);
-  const body=new CANNON.Body({mass:.170,material:mBall,linearDamping:.36,angularDamping:.40});
+  const body=new CANNON.Body({mass:.170,material:mBall,linearDamping:.58,angularDamping:.64});
   body.addShape(new CANNON.Sphere(BR));body.position.set(x,BR,z);world.addBody(body);
   const ball={mesh,body,n:def.n,pocketed:false,isCue:def.n===0};
   balls.push(ball);return ball;
@@ -646,7 +646,7 @@ function checkPockets(){
 }
 
 function allStopped(){
-  return balls.every(b=>b.pocketed||b.body.velocity.length()<.012&&b.body.angularVelocity.length()<.012);
+  return balls.every(b=>b.pocketed||b.body.velocity.length()<.06&&b.body.angularVelocity.length()<.06);
 }
 
 // ── Game flow ─────────────────────────────────────────────────────────
