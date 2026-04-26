@@ -343,27 +343,11 @@ window.addEventListener('touchend', e=>{
 },{passive:false});
 window.addEventListener('touchcancel', pUp);
 
-// ── Score: ball must FALL through hoop opening from above (checked after all collisions) ──
-function checkScore(b) {
-  if (b.scoredThisShot || b.vel.y >= -0.3) return; // must be clearly falling
-  const {x,y,z} = b.mesh.position;
-  if (z > HOOP_Z + 0.3) return;  // must be at/past the hoop plane in z
-  if (y > HOOP_Y + BALL_R || y < HOOP_Y - BALL_R * 2.5) return;
-  const dxz = Math.sqrt(x*x + (z-HOOP_Z)*(z-HOOP_Z));
-  if (dxz < RIM_R * 0.68) { // ≈0.30 — ball center well inside the rim
-    b.scoredThisShot=true; scored++; streak++;
-    if (scored>hiScore) hiScore=scored;
-    flashRim(0x00ff88);
-    if (streak>=3) showPopup(`🔥 ${streak}連中！`,'#ff9900');
-    else if (streak===2) showPopup('NICE! ×2 🔥','#ffd700');
-    else showPopup('NICE! 🏀','#00e5ff');
-  }
-}
-
 // ── Per-ball physics ──
 function updateBall(b, dt) {
   if (!b.active) return;
   if (!b.awaitReset) {
+    const pz = b.mesh.position.z; // capture before update (for hoop-plane crossing)
     b.vel.y+=GRAVITY*dt;
     b.mesh.position.addScaledVector(b.vel,dt);
     b.mesh.rotation.x+=b.vel.z*dt*3.0;
@@ -393,9 +377,10 @@ function updateBall(b, dt) {
       b.mesh.position.z = -3.0 + BALL_R;
     }
 
-    // Rim (torus closest-point) — gate: only when ball has passed the rim's front face
+    // Rim (torus closest-point) — gate: only near hoop z-range, not front approach zone
     const dxz=Math.sqrt(bx*bx+(bz-HOOP_Z)*(bz-HOOP_Z));
-    if (dxz>0.01 && b.mesh.position.z < HOOP_Z + RIM_R) {
+    const dzh=Math.abs(bz-HOOP_Z);
+    if (dxz>0.01 && dzh<RIM_R+RIM_TUBE && b.mesh.position.z < HOOP_Z + 0.10) {
       const cpx=bx*RIM_R/dxz, cpy=HOOP_Y, cpz=HOOP_Z+(bz-HOOP_Z)*RIM_R/dxz;
       const cd=Math.sqrt((bx-cpx)**2+(by-cpy)**2+(bz-cpz)**2);
       if (cd<BALL_R+RIM_TUBE) {
@@ -444,8 +429,19 @@ function updateBall(b, dt) {
     // Out of bounds (should not happen now with back wall + ceiling)
     if (b.mesh.position.y < -1.0) { b.awaitReset=true; b.resetTimer=0; }
 
-    // Score check AFTER all collisions — physically correct
-    checkScore(b);
+    // Z-crossing score: ball must fall through the hoop plane (pz→bz crosses HOOP_Z)
+    if (!b.scoredThisShot && b.vel.y < -0.3 && pz > HOOP_Z && b.mesh.position.z <= HOOP_Z) {
+      const fx=b.mesh.position.x, fz=b.mesh.position.z;
+      const dxz2=Math.sqrt(fx*fx+(fz-HOOP_Z)*(fz-HOOP_Z));
+      if (dxz2 < RIM_R-RIM_TUBE && Math.abs(b.mesh.position.y-HOOP_Y) < 0.65) {
+        b.scoredThisShot=true; scored++; streak++;
+        if (scored>hiScore) hiScore=scored;
+        flashRim(0x00ff88);
+        if (streak>=3) showPopup(`🔥 ${streak}連中！`,'#ff9900');
+        else if (streak===2) showPopup('NICE! ×2 🔥','#ffd700');
+        else showPopup('NICE! 🏀','#00e5ff');
+      }
+    }
   }
 
   // Miss + fade-out
