@@ -8,6 +8,43 @@
 * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
 body { background:#000; overflow:hidden; font-family:'Microsoft JhengHei',sans-serif; }
 canvas { display:block; }
+
+/* ── 力道充能條 ── */
+#power-wrap {
+  position:fixed; left:14px; top:50%; transform:translateY(-50%);
+  display:none; flex-direction:column; align-items:center; gap:6px; z-index:15;
+}
+#power-label {
+  color:#fff; font-size:.78em; font-weight:700; letter-spacing:.06em;
+  text-shadow:0 0 8px #ff8800;
+}
+#power-bar-bg {
+  width:26px; height:170px;
+  background:rgba(0,0,0,.65); border:2px solid #555; border-radius:13px;
+  position:relative; overflow:hidden;
+}
+#power-bar-fill {
+  position:absolute; bottom:0; left:0; right:0; height:0%;
+  border-radius:0 0 11px 11px;
+  background:linear-gradient(to top, #00dd44 0%, #ffcc00 50%, #ff3300 100%);
+  transition:height .04s linear;
+}
+#power-sweet-lo, #power-sweet-hi {
+  position:absolute; left:0; right:0; height:2px; background:rgba(255,255,255,.7);
+}
+/* sweet zone indicator lines: 40%–66% of bar */
+#power-sweet-lo { bottom:40%; }
+#power-sweet-hi { bottom:66%; }
+#power-sweet-zone {
+  position:absolute; left:0; right:0; bottom:40%; height:26%;
+  background:rgba(0,255,100,.15);
+}
+#power-pct {
+  color:#ffcc00; font-size:.88em; font-weight:900; min-width:36px; text-align:center;
+  text-shadow:0 0 6px #ff8800;
+}
+
+/* ── Popup & HUD ── */
 #popup {
   position:fixed; top:32%; left:50%; transform:translate(-50%,-50%);
   font-size:clamp(1.8em,9vw,4.5em); font-weight:900; pointer-events:none;
@@ -15,7 +52,8 @@ canvas { display:block; }
 }
 #hint {
   position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
-  color:rgba(255,255,255,.55); font-size:.88em; pointer-events:none; text-align:center; z-index:10;
+  color:rgba(255,255,255,.55); font-size:.9em; pointer-events:none;
+  text-align:center; z-index:10; line-height:1.55;
 }
 #gameover {
   position:fixed; inset:0; background:rgba(0,0,0,.90);
@@ -35,26 +73,40 @@ canvas { display:block; }
 </style>
 </head>
 <body>
+
+<!-- Power bar -->
+<div id="power-wrap">
+  <div id="power-label">力道</div>
+  <div id="power-bar-bg">
+    <div id="power-bar-fill"></div>
+    <div id="power-sweet-zone"></div>
+    <div id="power-sweet-lo"></div>
+    <div id="power-sweet-hi"></div>
+  </div>
+  <div id="power-pct">0%</div>
+</div>
+
 <div id="popup"></div>
-<div id="hint">向上滑動投籃</div>
+<div id="hint">按住蓄力　放開投籃</div>
 <div id="gameover">
   <h2>時間到！</h2>
   <div id="final-score"></div>
   <div id="final-rate"></div>
   <button id="replay-btn">再玩一次</button>
 </div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 'use strict';
-const W=()=>window.innerWidth, H=()=>window.innerHeight;
+const W = () => window.innerWidth, H = () => window.innerHeight;
 
 // ── Constants ──
-const GRAVITY   = -14;
-const HOOP_Z    = -2.0;   // hoop distance from viewer
-const HOOP_Y    = 3.4;    // hoop height
-const RIM_R     = 0.44;   // rim radius
-const BALL_R    = 0.23;   // ball radius
-const WALL_HW   = 1.55;   // machine half-width (inner)
+const GRAVITY  = -14;
+const HOOP_Z   = -2.0;
+const HOOP_Y   = 3.4;
+const RIM_R    = 0.44;
+const BALL_R   = 0.23;
+const WALL_HW  = 1.55;
 const BALL_HOME = new THREE.Vector3(0, 0.38, 2.0);
 
 // ── Renderer ──
@@ -69,7 +121,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x010c1a);
 scene.fog = new THREE.Fog(0x010c1a, 14, 26);
 
-// ── Camera — FRONT VIEW (player's eye looking into machine) ──
+// ── Camera — front view ──
 const getFOV = () => W() < H() ? 70 : 52;
 const camera = new THREE.PerspectiveCamera(getFOV(), W()/H(), 0.1, 40);
 camera.position.set(0, 0.9, 4.2);
@@ -79,8 +131,7 @@ camera.lookAt(0, 3.0, -2.0);
 scene.add(new THREE.AmbientLight(0xffffff, 0.45));
 const sun = new THREE.DirectionalLight(0xfff4e0, 1.0);
 sun.position.set(0, 8, 3); sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
-scene.add(sun);
+sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
 const blueL = new THREE.PointLight(0x1133cc, 1.4, 9);
 blueL.position.set(-2.5, 3.5, 0); scene.add(blueL);
 const blueR = new THREE.PointLight(0x1133cc, 1.4, 9);
@@ -88,31 +139,25 @@ blueR.position.set(2.5, 3.5, 0); scene.add(blueR);
 const rimLight = new THREE.PointLight(0xff6600, 1.0, 5);
 rimLight.position.set(0, 5.0, -1.5); scene.add(rimLight);
 
-// ── Floor (wood) ── extends from back to viewer
+// ── Floor ──
 const floorGeo = new THREE.PlaneGeometry(3.1, 11.0);
 const floorMat = new THREE.MeshStandardMaterial({ color: 0xc07535, roughness: 0.78 });
 const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI/2;
-floor.position.set(0, 0, -0.5); // centered between z=-6 and z=5
-floor.receiveShadow = true;
-scene.add(floor);
-// Wood grain lines
+floor.rotation.x = -Math.PI/2; floor.position.set(0, 0, -0.5);
+floor.receiveShadow = true; scene.add(floor);
 const flm = new THREE.LineBasicMaterial({ color: 0x8b5020, opacity: 0.35, transparent: true });
 [-0.75, 0, 0.75].forEach(x => scene.add(new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, 0.01, -5.5), new THREE.Vector3(x, 0.01, 4.5)]),
-  flm
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,.01,-5.5), new THREE.Vector3(x,.01,4.5)]), flm
 )));
 
-// ── Side walls (blue cabinet) ── extend full depth
+// ── Side walls ──
 const wallMat = new THREE.MeshStandardMaterial({ color: 0x041248, roughness: 0.4, metalness: 0.3 });
 const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 5.5, 11.0), wallMat);
 wallL.position.set(-1.67, 2.75, -0.5); wallL.castShadow = true; scene.add(wallL);
 const wallR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 5.5, 11.0), wallMat);
 wallR.position.set(1.67, 2.75, -0.5); wallR.castShadow = true; scene.add(wallR);
-// Glowing trim strips
 const trimMat = new THREE.MeshStandardMaterial({
-  color: 0x1a44ee, metalness: 0.8, roughness: 0.15,
-  emissive: new THREE.Color(0x001477)
+  color: 0x1a44ee, metalness: 0.8, roughness: 0.15, emissive: new THREE.Color(0x001477)
 });
 [-1.56, 1.56].forEach(x => {
   const t = new THREE.Mesh(new THREE.BoxGeometry(0.03, 5.5, 11.0), trimMat);
@@ -138,7 +183,7 @@ for (let i = 0; i < 15; i++) {
   scene.add(led); leds.push(led);
 }
 
-// ── Scoreboard (canvas texture) ──
+// ── Scoreboard ──
 const sbCvs = document.createElement('canvas');
 sbCvs.width = 512; sbCvs.height = 192;
 const sbCtx = sbCvs.getContext('2d');
@@ -147,69 +192,52 @@ const sbMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(2.2, 0.82),
   new THREE.MeshBasicMaterial({ map: sbTex })
 );
-sbMesh.position.set(0, 4.9, -3.13);
-scene.add(sbMesh);
+sbMesh.position.set(0, 4.9, -3.13); scene.add(sbMesh);
 
 function drawBoard(t, sc, hi, active) {
   const ctx = sbCtx, w = 512, h = 192;
   ctx.fillStyle = '#000e20'; ctx.fillRect(0, 0, w, h);
-  // Dot matrix background
   ctx.fillStyle = '#001530';
   for (let x = 0; x < w; x += 5) for (let y = 0; y < h; y += 5) ctx.fillRect(x, y, 2, 2);
-  // Dividers
   ctx.strokeStyle = '#002244'; ctx.lineWidth = 1;
   [170, 342].forEach(x => { ctx.beginPath(); ctx.moveTo(x,8); ctx.lineTo(x,h-8); ctx.stroke(); });
-  // Labels
   ctx.fillStyle = '#7799bb'; ctx.font = 'bold 19px monospace'; ctx.textAlign = 'center';
   ctx.fillText('HIGHEST', 85, 28); ctx.fillText('TIME', 256, 28); ctx.fillText('SCORE', 427, 28);
-  // Values
   ctx.font = 'bold 66px monospace';
   ctx.fillStyle = '#ff6600'; ctx.fillText(hi.toString().padStart(3,'0'), 85, 112);
   ctx.fillStyle = t <= 10 ? '#ff2200' : '#ff8800';
   ctx.fillText(Math.ceil(Math.max(0, t)).toString().padStart(2,'0'), 256, 112);
   ctx.fillStyle = '#ff6600'; ctx.fillText(sc.toString().padStart(3,'0'), 427, 112);
-  if (!active) {
-    ctx.fillStyle = '#ffdd00'; ctx.font = 'bold 26px monospace';
-    ctx.fillText('WELCOME', 256, 168);
-  }
+  if (!active) { ctx.fillStyle = '#ffdd00'; ctx.font = 'bold 26px monospace'; ctx.fillText('WELCOME', 256, 168); }
   sbTex.needsUpdate = true;
 }
 
 // ── Backboard ──
-const bbMat = new THREE.MeshStandardMaterial({
-  color: 0xd8eeff, transparent: true, opacity: 0.78, roughness: 0.05
-});
+const bbMat = new THREE.MeshStandardMaterial({ color: 0xd8eeff, transparent: true, opacity: 0.78, roughness: 0.05 });
 const bb = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 0.05), bbMat);
-bb.position.set(0, HOOP_Y + 0.52, HOOP_Z - 0.52);
-bb.castShadow = true; scene.add(bb);
-// Red square target on backboard
+bb.position.set(0, HOOP_Y + 0.52, HOOP_Z - 0.52); bb.castShadow = true; scene.add(bb);
 const sq = new THREE.Mesh(
   new THREE.BoxGeometry(0.52, 0.40, 0.04),
   new THREE.MeshStandardMaterial({ color: 0xff3300, transparent: true, opacity: 0.5 })
 );
 sq.position.set(0, HOOP_Y + 0.45, HOOP_Z - 0.50); scene.add(sq);
-// Support arm
 const metal = new THREE.MeshStandardMaterial({ color: 0xc8c8c8, metalness: 0.9, roughness: 0.15 });
 const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.62, 8), metal);
-arm.rotation.set(Math.PI/2, 0, 0);
-arm.position.set(0, HOOP_Y + 0.04, HOOP_Z - 0.24); scene.add(arm);
+arm.rotation.set(Math.PI/2, 0, 0); arm.position.set(0, HOOP_Y + 0.04, HOOP_Z - 0.24); scene.add(arm);
 
 // ── Rim ──
 const rimMesh = new THREE.Mesh(
   new THREE.TorusGeometry(RIM_R, 0.032, 12, 64),
   new THREE.MeshStandardMaterial({ color: 0xff5500, metalness: 0.85, roughness: 0.15 })
 );
-rimMesh.rotation.x = Math.PI/2;
-rimMesh.position.set(0, HOOP_Y, HOOP_Z);
+rimMesh.rotation.x = Math.PI/2; rimMesh.position.set(0, HOOP_Y, HOOP_Z);
 rimMesh.castShadow = true; scene.add(rimMesh);
 
 // ── Net ──
 (function() {
   const segs = 12, netH = 0.44, topR = RIM_R - 0.02, botR = RIM_R * 0.25;
   const nm = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.55, transparent: true });
-  const v = (a, r, yo) => new THREE.Vector3(
-    Math.cos(a)*r, HOOP_Y - yo, HOOP_Z + Math.sin(a)*r
-  );
+  const v = (a, r, yo) => new THREE.Vector3(Math.cos(a)*r, HOOP_Y-yo, HOOP_Z+Math.sin(a)*r);
   for (let i = 0; i < segs; i++) {
     const a = (i/segs)*Math.PI*2, a2 = ((i+1)/segs)*Math.PI*2;
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a,topR,0), v(a,botR,netH)]), nm));
@@ -220,11 +248,10 @@ rimMesh.castShadow = true; scene.add(rimMesh);
   }
 })();
 
-// ── Main ball ──
+// ── Ball ──
 const ballMat = new THREE.MeshStandardMaterial({ color: 0xff6200, roughness: 0.60, metalness: 0.05 });
 const ball = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 32, 32), ballMat);
 ball.castShadow = true;
-// Seams
 const seamMat = new THREE.LineBasicMaterial({ color: 0x2a0800, opacity: 0.65, transparent: true });
 [[0],[1],[2]].forEach(([ai]) => {
   const pts = [];
@@ -257,29 +284,54 @@ const blob = new THREE.Mesh(
 );
 blob.rotation.x = -Math.PI/2; blob.position.y = 0.01; scene.add(blob);
 
-// ── Trajectory arc dots ──
-const ARC_N = 18;
+// ── Arc dots (trajectory preview) ──
+const ARC_N = 22;
 const arcDots = Array.from({ length: ARC_N }, (_, i) => {
   const d = new THREE.Mesh(
-    new THREE.SphereGeometry(Math.max(0.022, 0.055 - i*0.002), 6, 6),
-    new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: Math.max(0.07, 0.82 - i*0.044) })
+    new THREE.SphereGeometry(Math.max(0.020, 0.052 - i*0.002), 6, 6),
+    new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: Math.max(0.06, 0.80 - i*0.036) })
   );
   d.visible = false; scene.add(d); return d;
 });
 
-function showArc(dx, dy) {
-  const nUp = -dy / H();
-  if (nUp < 0.025) { hideArc(); return; }
-  const vx0 = (dx/H())*15, vy0 = nUp*36, vz0 = -nUp*40;
-  const sdt = 0.055;
-  let px=ballHome.x, py=ballHome.y, pz=ballHome.z, vx=vx0, vy=vy0, vz=vz0;
+// Velocity for a given power level
+const VY_COEFF = 18.5; // vel_y = power * VY_COEFF  → at 0.5 power, perfect center shot
+const VZ_COEFF = 11.0; // vel_z = -power * VZ_COEFF
+const VX_COEFF = 3.5;  // vel_x = pressX * power * VX_COEFF (left/right aim)
+
+function calcVel(power, pressX) {
+  return new THREE.Vector3(
+    pressX * power * VX_COEFF,
+    power * VY_COEFF,
+    -power * VZ_COEFF
+  );
+}
+
+function showArcForPower(power, pressX) {
+  if (power < 0.08) { hideArc(); return; }
+  const v = calcVel(power, pressX);
+  const sdt = 0.058;
+  let px = ballHome.x, py = ballHome.y, pz = ballHome.z;
+  let vx = v.x, vy = v.y, vz = v.z;
   arcDots.forEach(d => {
     vy += GRAVITY * sdt; px += vx*sdt; py += vy*sdt; pz += vz*sdt;
-    if (py < 0.05 || pz < -5) { d.visible = false; }
+    if (py < 0.05 || pz < -5.5) { d.visible = false; }
     else { d.position.set(px, py, pz); d.visible = true; }
   });
 }
 function hideArc() { arcDots.forEach(d => d.visible = false); }
+
+// ── Power bar UI elements ──
+const pwWrap  = document.getElementById('power-wrap');
+const pwFill  = document.getElementById('power-bar-fill');
+const pwPct   = document.getElementById('power-pct');
+function updatePowerUI(p) {
+  pwFill.style.height = (p * 100) + '%';
+  pwPct.textContent = Math.round(p * 100) + '%';
+  // Color tint based on power
+  const inSweet = p >= 0.40 && p <= 0.66;
+  pwPct.style.color = inSweet ? '#00ff88' : '#ffcc00';
+}
 
 // ── Game state ──
 let scored=0, hiScore=0, shots=0, streak=0;
@@ -287,14 +339,20 @@ let inFlight=false, scoredThisShot=false;
 let gameActive=false, timeLeft=60;
 let vel = new THREE.Vector3();
 let popTimer=0, resetTimer=0, awaitReset=false;
-let drag=false, dsx=0, dsy=0;
 let ballHome = BALL_HOME.clone();
 let bbFlashTimer = 0;
 
-const popupEl = document.getElementById('popup');
+// Press-hold power state
+let powering  = false;
+let pressTimer = 0;
+let pressX    = 0;  // -1 (left) to +1 (right)
+const POWER_DURATION = 1.1; // seconds to reach full power
+
+const popupEl    = document.getElementById('popup');
 const gameoverEl = document.getElementById('gameover');
-const hintEl = document.getElementById('hint');
+const hintEl     = document.getElementById('hint');
 document.getElementById('replay-btn').addEventListener('click', startGame);
+document.getElementById('replay-btn').addEventListener('touchend', e => { e.preventDefault(); startGame(); });
 
 function showPopup(txt, col) {
   popupEl.textContent = txt; popupEl.style.color = col;
@@ -304,47 +362,49 @@ function flashRim(col) {
   rimMesh.material.color.set(col);
   setTimeout(() => rimMesh.material.color.set(0xff5500), 250);
 }
-function flashBB() {
-  bbMat.color.set(0xffffff); bbMat.opacity = 1.0;
-  bbFlashTimer = 0.18;
-}
 
-// ── Controls ──
-function pDown(cx, cy) { if (!gameActive || inFlight) return; drag=true; dsx=cx; dsy=cy; }
-function pMove(cx, cy) { if (drag) showArc(cx-dsx, cy-dsy); }
-function pUp(cx, cy) {
-  if (!drag) return; drag=false; hideArc();
-  const dx=cx-dsx, dy=cy-dsy, nUp=-dy/H();
-  if (nUp < 0.028 || inFlight || !gameActive) return;
-  shots++;
-  vel.set((dx/H())*15, nUp*36, -nUp*40);
-  ball.position.copy(ballHome);
-  inFlight=true; scoredThisShot=false; awaitReset=false;
+// ── Controls: press-hold-release ──
+function pDown(cx, cy) {
+  if (!gameActive || inFlight) return;
+  powering = true; pressTimer = 0;
+  pressX = (cx - W()/2) / (W()/2); // -1 to +1
+  pwWrap.style.display = 'flex';
   hintEl.style.opacity = '0';
 }
-window.addEventListener('mousedown',  e => pDown(e.clientX, e.clientY));
-window.addEventListener('mousemove',  e => pMove(e.clientX, e.clientY));
-window.addEventListener('mouseup',    e => pUp(e.clientX, e.clientY));
-window.addEventListener('touchstart', e => {
-  if (e.target.closest('button')) return; // allow button taps
-  e.preventDefault(); pDown(e.touches[0].clientX, e.touches[0].clientY);
-}, {passive:false});
-window.addEventListener('touchmove', e => { e.preventDefault(); pMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-window.addEventListener('touchend', e => {
-  if (e.target.closest('button')) return; // allow button taps
-  e.preventDefault(); pUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-}, {passive:false});
+function pUp() {
+  if (!powering) return;
+  powering = false;
+  pwWrap.style.display = 'none';
+  hideArc();
+  if (!gameActive || inFlight) return;
+  const power = Math.min(pressTimer / POWER_DURATION, 1.0);
+  if (power < 0.05) return; // too short a press
+  shots++;
+  const v = calcVel(power, pressX);
+  vel.copy(v);
+  ball.position.copy(ballHome);
+  inFlight = true; scoredThisShot = false; awaitReset = false;
+}
 
-// ── Score detection (ellipsoid zone around hoop — works rising OR falling) ──
+window.addEventListener('mousedown',  e => pDown(e.clientX, e.clientY));
+window.addEventListener('mouseup',    () => pUp());
+window.addEventListener('touchstart', e => {
+  if (e.target.closest('#replay-btn, button')) return;
+  e.preventDefault();
+  pDown(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+window.addEventListener('touchend', e => {
+  if (e.target.closest('#replay-btn, button')) return;
+  e.preventDefault(); pUp();
+}, { passive: false });
+window.addEventListener('touchcancel', () => pUp());
+
+// ── Score detection: ellipsoid zone around hoop ──
 function checkScore() {
   if (scoredThisShot || ball.position.y < 0.5) return;
   const {x:bx, y:by, z:bz} = ball.position;
-  const RX = RIM_R - 0.06; // tight horizontal (must be inside rim)
-  const RY = 0.48;          // generous vertical
-  const RZ = 0.55;          // allow ball slightly in front/behind hoop plane
-  const score3D =
-    (bx/RX)**2 + ((by-HOOP_Y)/RY)**2 + ((bz-HOOP_Z)/RZ)**2 < 1;
-  if (score3D) {
+  const RX = RIM_R - 0.06, RY = 0.52, RZ = 0.60;
+  if ((bx/RX)**2 + ((by-HOOP_Y)/RY)**2 + ((bz-HOOP_Z)/RZ)**2 < 1) {
     scoredThisShot = true; scored++; streak++;
     if (scored > hiScore) hiScore = scored;
     flashRim(0x00ff88);
@@ -359,19 +419,19 @@ function startGame() {
   scored=0; shots=0; streak=0;
   inFlight=false; scoredThisShot=false; awaitReset=false;
   timeLeft=60; gameActive=true;
+  powering=false; pressTimer=0;
+  pwWrap.style.display = 'none';
   vel.set(0,0,0);
   ballHome.copy(BALL_HOME);
   ball.position.copy(ballHome);
   gameoverEl.style.display = 'none';
-  hintEl.style.opacity = '.5';
-  trayBalls.forEach((tb, i) => {
-    tb.visible = true;
-    tb.position.set((i-1)*0.72, 0.34, 2.35);
-  });
+  hintEl.style.opacity = '.6';
+  trayBalls.forEach((tb, i) => { tb.visible = true; tb.position.set((i-1)*0.72, 0.34, 2.35); });
   hideArc();
 }
 function endGame() {
-  gameActive = false;
+  gameActive = false; powering = false;
+  pwWrap.style.display = 'none'; hideArc();
   const rate = shots > 0 ? Math.round(scored/shots*100) : 0;
   document.getElementById('final-score').textContent = `${scored} 分`;
   document.getElementById('final-rate').textContent = `投 ${shots} 球・命中率 ${rate}%`;
@@ -379,8 +439,8 @@ function endGame() {
 }
 
 // ── Physics constants ──
-const BB_FACE_Z = HOOP_Z - 0.50;  // front face of backboard
-const RIM_TUBE  = 0.044;           // rim tube radius
+const BB_FACE_Z = HOOP_Z - 0.50;
+const RIM_TUBE  = 0.044;
 
 // ── Main loop ──
 const clock = new THREE.Clock();
@@ -392,7 +452,7 @@ function tick() {
 
   if (gameActive) { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; endGame(); } }
 
-  // LED blink when time low
+  // LED blink at low time
   ledT += dt;
   if (gameActive && timeLeft <= 10) {
     const blink = Math.sin(ledT * 9) > 0;
@@ -402,40 +462,48 @@ function tick() {
   // Backboard flash decay
   if (bbFlashTimer > 0) {
     bbFlashTimer -= dt;
-    if (bbFlashTimer <= 0) {
-      bbMat.color.set(0xd8eeff); bbMat.opacity = 0.78;
-    }
+    if (bbFlashTimer <= 0) { bbMat.color.set(0xd8eeff); bbMat.opacity = 0.78; }
+  }
+
+  // ── Power charging ──
+  if (powering && gameActive && !inFlight) {
+    pressTimer += dt;
+    const power = Math.min(pressTimer / POWER_DURATION, 1.0);
+    updatePowerUI(power);
+    showArcForPower(power, pressX);
+    // Pulse ball when charging
+    const pulse = 1 + 0.04 * Math.sin(ledT * 18);
+    ball.scale.setScalar(pulse);
+  } else if (!inFlight) {
+    ball.scale.setScalar(1);
   }
 
   if (inFlight) {
-    // ── Gravity ──
+    ball.scale.setScalar(1);
     vel.y += GRAVITY * dt;
     ball.position.addScaledVector(vel, dt);
-    // Ball spin
     ball.rotation.x += vel.z * dt * 3.0;
     ball.rotation.z -= vel.x * dt * 3.0;
 
-    // Shadow blob
     const bh = ball.position.y;
     blob.position.set(ball.position.x, 0.01, ball.position.z);
     blob.scale.setScalar(Math.max(0.12, 1 - bh * 0.10));
     blob.material.opacity = Math.max(0.03, 0.48 - bh * 0.05);
 
-    // ── Score check ──
     checkScore();
 
     // ── Backboard collision ──
     if (vel.z < 0 &&
         ball.position.z - BALL_R <= BB_FACE_Z &&
         ball.position.z + BALL_R  > BB_FACE_Z - 0.08 &&
-        Math.abs(ball.position.x)  < 0.88 &&
+        Math.abs(ball.position.x) < 0.88 &&
         ball.position.y > HOOP_Y - 0.15 &&
         ball.position.y < HOOP_Y + 1.05) {
       vel.z = -vel.z * 0.50;
-      vel.x += (Math.random() - 0.5) * 0.5;
-      vel.y -= 0.5;
+      vel.x += (Math.random() - 0.5) * 0.4;
+      vel.y -= 0.4;
       ball.position.z = BB_FACE_Z + BALL_R + 0.01;
-      flashBB();
+      bbMat.color.set(0xffffff); bbMat.opacity = 1.0; bbFlashTimer = 0.18;
       if (!scoredThisShot) showPopup('BOARD!', '#88ccff');
     }
 
@@ -444,23 +512,16 @@ function tick() {
       const bxr=ball.position.x, byr=ball.position.y, bzr=ball.position.z;
       const dxz = Math.sqrt(bxr*bxr + (bzr-HOOP_Z)*(bzr-HOOP_Z));
       if (dxz > 0.01) {
-        const cpx = bxr * RIM_R / dxz;
-        const cpy = HOOP_Y;
-        const cpz = HOOP_Z + (bzr-HOOP_Z) * RIM_R / dxz;
-        const cd  = Math.sqrt((bxr-cpx)**2 + (byr-cpy)**2 + (bzr-cpz)**2);
+        const cpx = bxr*RIM_R/dxz, cpy = HOOP_Y, cpz = HOOP_Z+(bzr-HOOP_Z)*RIM_R/dxz;
+        const cd = Math.sqrt((bxr-cpx)**2 + (byr-cpy)**2 + (bzr-cpz)**2);
         if (cd < BALL_R + RIM_TUBE) {
           const nx=(bxr-cpx)/cd, ny=(byr-cpy)/cd, nz=(bzr-cpz)/cd;
           const dot = vel.x*nx + vel.y*ny + vel.z*nz;
           if (dot < 0) {
             const e = 0.38;
-            vel.x -= (1+e)*dot*nx;
-            vel.y -= (1+e)*dot*ny;
-            vel.z -= (1+e)*dot*nz;
-            // Push ball out of rim
+            vel.x -= (1+e)*dot*nx; vel.y -= (1+e)*dot*ny; vel.z -= (1+e)*dot*nz;
             const overlap = BALL_R + RIM_TUBE - cd;
-            ball.position.x += nx * overlap;
-            ball.position.y += ny * overlap;
-            ball.position.z += nz * overlap;
+            ball.position.x += nx*overlap; ball.position.y += ny*overlap; ball.position.z += nz*overlap;
             flashRim(0xffdd00);
           }
         }
@@ -473,48 +534,42 @@ function tick() {
       vel.x = -vel.x * 0.40;
     }
 
+    // ── Front wall (stop ball coming back past camera) ──
+    if (ball.position.z > 3.8 && vel.z > 0) {
+      vel.z = -vel.z * 0.30; ball.position.z = 3.8;
+    }
+
     // ── Floor collision ──
     if (ball.position.y < BALL_R) {
       ball.position.y = BALL_R;
-      if (Math.abs(vel.y) > 0.8) {
-        vel.y = -vel.y * 0.30;
-        vel.x *= 0.85;
-        vel.z *= 0.85;
+      if (Math.abs(vel.y) > 1.0) {
+        vel.y = -vel.y * 0.28; vel.x *= 0.82; vel.z *= 0.82;
       } else {
         vel.set(0,0,0);
         if (!awaitReset) { awaitReset = true; resetTimer = 0; }
       }
     }
 
-    // ── Front wall collision (stop ball coming back toward camera) ──
-    if (ball.position.z > 3.8 && vel.z > 0) {
-      vel.z = -vel.z * 0.30;
-      ball.position.z = 3.8;
-    }
-
     // ── Out-of-bounds reset ──
-    if (!awaitReset && (ball.position.z < -6.0 || ball.position.z > 5.0)) {
-      awaitReset = true; resetTimer = 0;
-    }
-    if (!awaitReset && ball.position.y < -0.5) {
+    if (!awaitReset && (ball.position.z < -6.5 || ball.position.y < -0.5)) {
       awaitReset = true; resetTimer = 0;
     }
     if (awaitReset && !scoredThisShot && popTimer <= 0) {
-      showPopup('MISS', '#ff4444');
-      streak = 0;
+      showPopup('MISS', '#ff4444'); streak = 0;
     }
     if (awaitReset) {
       resetTimer += dt;
-      if (resetTimer > 0.6) {
+      if (resetTimer > 0.65) {
         inFlight=false; awaitReset=false; scoredThisShot=false;
         vel.set(0,0,0);
-        ballHome.x = (Math.random() - 0.5) * 0.42;
+        ballHome.x = (Math.random() - 0.5) * 0.40;
         ball.position.copy(ballHome);
-        trayBalls.forEach((tb, i) => tb.position.set((i-1)*0.72 + ballHome.x*0.15, 0.34, 2.35));
+        trayBalls.forEach((tb, i) => tb.position.set((i-1)*0.72 + ballHome.x*0.12, 0.34, 2.35));
+        hintEl.style.opacity = '0.6';
       }
     }
 
-  } else {
+  } else if (!powering) {
     // Idle float
     const t = clock.getElapsedTime();
     ball.position.set(ballHome.x, ballHome.y + Math.sin(t*2.2)*0.03, ballHome.z);
