@@ -307,8 +307,82 @@ document.getElementById('replay-btn').addEventListener('touchend', e=>{e.prevent
 function showPopup(txt,col){ popupEl.textContent=txt; popupEl.style.color=col; popupEl.style.opacity='1'; popTimer=1.1; }
 function flashRim(col){ rimMesh.material.color.set(col); setTimeout(()=>rimMesh.material.color.set(0xff5500),250); }
 
+// ── Audio System (Web Audio API, fully synthesized — no external files) ──
+let _ac=null;
+const ac=()=>{if(!_ac)_ac=new(window.AudioContext||window.webkitAudioContext)();if(_ac.state==='suspended')_ac.resume();return _ac;};
+let _mGain=null;
+const mg=()=>{if(!_mGain){_mGain=ac().createGain();_mGain.gain.value=0.55;_mGain.connect(ac().destination);}return _mGain;};
+
+function sfx(type,vol=1){
+  try{
+    const c=ac(),t=c.currentTime,dst=mg();
+    const osc=(tp,fr)=>{const o=c.createOscillator();o.type=tp;o.frequency.value=fr;return o;};
+    const gn=(v,dur,ti=t)=>{const g=c.createGain();g.gain.setValueAtTime(v,ti);g.gain.exponentialRampToValueAtTime(0.001,ti+dur);return g;};
+    const run=(o,g,dur,ti=t)=>{o.connect(g);g.connect(dst);o.start(ti);o.stop(ti+dur);};
+    const noise=(dur,lo,hi,gv,ti=t)=>{
+      const buf=c.createBuffer(1,Math.ceil(c.sampleRate*dur),c.sampleRate);
+      const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+      const s=c.createBufferSource();s.buffer=buf;
+      const f=c.createBiquadFilter();f.type='bandpass';f.frequency.setValueAtTime(hi,ti);f.frequency.exponentialRampToValueAtTime(lo,ti+dur);f.Q.value=2;
+      const g=c.createGain();g.gain.setValueAtTime(gv,ti);g.gain.exponentialRampToValueAtTime(0.001,ti+dur);
+      s.connect(f);f.connect(g);g.connect(dst);s.start(ti);s.stop(ti+dur);
+    };
+    if(type==='shoot'){noise(0.14,300,1600,0.4*vol);}
+    else if(type==='bounce'){const o=osc('sine',140);o.frequency.exponentialRampToValueAtTime(42,t+0.1);run(o,gn(0.38*vol,0.1),0.1);}
+    else if(type==='rim'){[880,1320,1760].forEach((fr,i)=>{const o=osc('sine',fr);run(o,gn(0.18*vol/(i+1),0.4),0.4);});}
+    else if(type==='board'){const o=osc('sine',220);o.frequency.exponentialRampToValueAtTime(65,t+0.12);run(o,gn(0.3*vol,0.12),0.12);}
+    else if(type==='score'){
+      noise(0.16,3000,8000,0.5);
+      [523.25,659.25,783.99].forEach((fr,i)=>{const ti=t+i*0.09;const o=osc('triangle',fr);const g=c.createGain();g.gain.setValueAtTime(0,ti);g.gain.linearRampToValueAtTime(0.22,ti+0.025);g.gain.exponentialRampToValueAtTime(0.001,ti+0.25);run(o,g,0.25,ti);});
+    }
+    else if(type==='streak'){[523,659,784,1047].forEach((fr,i)=>{const ti=t+i*0.08;const o=osc('square',fr);const g=c.createGain();g.gain.setValueAtTime(0,ti);g.gain.linearRampToValueAtTime(0.18,ti+0.02);g.gain.exponentialRampToValueAtTime(0.001,ti+0.22);run(o,g,0.22,ti);});}
+    else if(type==='miss'){const o=osc('sawtooth',370);o.frequency.exponentialRampToValueAtTime(155,t+0.28);run(o,gn(0.18*vol,0.28),0.28);}
+    else if(type==='tick'){const o=osc('sine',900);run(o,gn(0.13,0.05),0.05);}
+    else if(type==='gameover'){[392,349,311,261].forEach((fr,i)=>{const ti=t+i*0.2;const o=osc('sawtooth',fr);run(o,gn(0.22,0.28),0.28,ti);});}
+  }catch(e){}
+}
+
+// ── Background Music ──
+let _bgOn=false,_bgNext=0,_bgStep=0;
+const BG_BPM=124,BG_B=60/BG_BPM;
+const BG_BASS=[65.41,65.41,73.42,73.42,55.00,55.00,87.31,98.00];
+const BG_MEL =[523.25,659.25,783.99,659.25,392.00,523.25,659.25,587.33];
+function _bgTick(){
+  if(!_bgOn)return;
+  const c=ac(),now=c.currentTime;
+  while(_bgNext<now+0.35){
+    const t=_bgNext,s=_bgStep%8;
+    // Bass
+    const bo=c.createOscillator();bo.type='sawtooth';bo.frequency.value=BG_BASS[s];
+    const bg=c.createGain();bg.gain.setValueAtTime(0.11,t);bg.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.75);
+    bo.connect(bg);bg.connect(mg());bo.start(t);bo.stop(t+BG_B);
+    // Melody (every 2 steps)
+    if(s%2===0){
+      const mo=c.createOscillator();mo.type='triangle';mo.frequency.value=BG_MEL[s/2]||523;
+      const mg2=c.createGain();mg2.gain.setValueAtTime(0,t);mg2.gain.linearRampToValueAtTime(0.07,t+0.03);mg2.gain.exponentialRampToValueAtTime(0.001,t+BG_B*1.9);
+      mo.connect(mg2);mg2.connect(mg());mo.start(t);mo.stop(t+BG_B*2);
+    }
+    // Hi-hat
+    const hb=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);
+    const hd=hb.getChannelData(0);for(let i=0;i<hd.length;i++)hd[i]=(Math.random()*2-1)*(1-i/hd.length);
+    const hs=c.createBufferSource();hs.buffer=hb;
+    const hf=c.createBiquadFilter();hf.type='highpass';hf.frequency.value=9000;
+    const hg=c.createGain();hg.gain.setValueAtTime(0.055,t);hg.gain.exponentialRampToValueAtTime(0.001,t+0.04);
+    hs.connect(hf);hf.connect(hg);hg.connect(mg());hs.start(t);hs.stop(t+0.04);
+    // Kick (beat 0,4)
+    if(s===0||s===4){const ko=c.createOscillator();ko.type='sine';ko.frequency.setValueAtTime(175,t);ko.frequency.exponentialRampToValueAtTime(38,t+0.16);const kg=c.createGain();kg.gain.setValueAtTime(0.28,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.16);ko.connect(kg);kg.connect(mg());ko.start(t);ko.stop(t+0.16);}
+    // Snare (beat 2,6)
+    if(s===2||s===6){const sb=c.createBuffer(1,Math.ceil(c.sampleRate*0.12),c.sampleRate);const sd=sb.getChannelData(0);for(let i=0;i<sd.length;i++)sd[i]=(Math.random()*2-1)*(1-i/sd.length);const ss=c.createBufferSource();ss.buffer=sb;const sf=c.createBiquadFilter();sf.type='bandpass';sf.frequency.value=1800;sf.Q.value=1;const sg=c.createGain();sg.gain.setValueAtTime(0.14,t);sg.gain.exponentialRampToValueAtTime(0.001,t+0.12);ss.connect(sf);sf.connect(sg);sg.connect(mg());ss.start(t);ss.stop(t+0.12);}
+    _bgNext+=BG_B;_bgStep++;
+  }
+  setTimeout(_bgTick,80);
+}
+function startBgMusic(){if(_bgOn)return;_bgOn=true;_bgNext=ac().currentTime+0.1;_bgStep=0;_bgTick();}
+function stopBgMusic(){_bgOn=false;}
+
 // ── Controls (no inFlight lock — always allow new shot) ──
 function pDown(cx) {
+  ac(); // wake AudioContext on first gesture
   if (!gameActive) return;
   powering=true; pressTimer=0;
   pressX=(cx-W()/2)/(W()/2);
@@ -329,6 +403,7 @@ function pUp() {
   b.mesh.visible=true; b.blob.visible=true;
   b.active=true; b.scoredThisShot=false;
   b.awaitReset=false; b.resetTimer=0; b.missShown=false;
+  sfx('shoot');
 }
 
 window.addEventListener('mousedown',  e=>pDown(e.clientX));
@@ -367,6 +442,7 @@ function updateBall(b, dt) {
       b.vel.y-=0.5;
       b.mesh.position.z=BB_FACE_Z+BALL_R+0.01;
       bbMat.color.set(0xffffff); bbMat.opacity=1.0; bbFlashTimer=0.18;
+      sfx('board');
       if (!b.scoredThisShot&&popTimer<=0) showPopup('BOARD!','#88ccff');
     }
 
@@ -391,7 +467,7 @@ function updateBall(b, dt) {
           b.vel.x-=(1+e)*dot*nx; b.vel.y-=(1+e)*dot*ny; b.vel.z-=(1+e)*dot*nz;
           const ov=BALL_R+RIM_TUBE-cd;
           b.mesh.position.x+=nx*ov; b.mesh.position.y+=ny*ov; b.mesh.position.z+=nz*ov;
-          flashRim(0xffdd00);
+          flashRim(0xffdd00); sfx('rim');
         }
       }
     }
@@ -399,7 +475,7 @@ function updateBall(b, dt) {
     // Side walls
     if (Math.abs(b.mesh.position.x)>WALL_HW-BALL_R) {
       b.mesh.position.x=Math.sign(b.mesh.position.x)*(WALL_HW-BALL_R);
-      b.vel.x=-b.vel.x*0.40;
+      b.vel.x=-b.vel.x*0.40; sfx('bounce',0.25);
     }
 
     // Ceiling — stops balls flying up out of scene at high power
@@ -420,7 +496,7 @@ function updateBall(b, dt) {
     if (b.mesh.position.y<BALL_R) {
       b.mesh.position.y=BALL_R;
       if (Math.abs(b.vel.y)>0.8) {
-        b.vel.y=-b.vel.y*0.22; b.vel.x*=0.80; b.vel.z*=0.80; // less bouncy floor
+        b.vel.y=-b.vel.y*0.22; b.vel.x*=0.80; b.vel.z*=0.80; sfx('bounce',0.5);
       } else {
         b.vel.set(0,0,0); b.awaitReset=true; b.resetTimer=0;
       }
@@ -441,6 +517,7 @@ function updateBall(b, dt) {
         b.scoredThisShot=true; scored++; streak++;
         if (scored>hiScore) hiScore=scored;
         flashRim(0x00ff88);
+        sfx(streak>=3?'streak':'score');
         if (streak>=3) showPopup(`🔥 ${streak}連中！`,'#ff9900');
         else if (streak===2) showPopup('NICE! ×2 🔥','#ffd700');
         else showPopup('NICE! 🏀','#00e5ff');
@@ -451,7 +528,7 @@ function updateBall(b, dt) {
   // Miss + fade-out
   if (b.awaitReset) {
     if (!b.scoredThisShot && !b.missShown) {
-      if (popTimer<=0) { showPopup('MISS','#ff4444'); streak=0; }
+      if (popTimer<=0) { showPopup('MISS','#ff4444'); streak=0; sfx('miss'); }
       b.missShown=true;
     }
     b.resetTimer+=dt;
@@ -488,8 +565,9 @@ function ballBallCollisions() {
 }
 
 // ── Game flow ──
+let _tickSec=-1;
 function startGame() {
-  scored=0; shots=0; streak=0; timeLeft=60; gameActive=true;
+  scored=0; shots=0; streak=0; timeLeft=60; gameActive=true; _tickSec=-1;
   powering=false; pressTimer=0; pwWrap.style.display='none';
   pool.forEach(b=>{b.active=false;b.mesh.visible=false;b.blob.visible=false;});
   ballHome.copy(BALL_HOME);
@@ -497,9 +575,11 @@ function startGame() {
   hintEl.style.opacity='.6';
   trayBalls.forEach((tb,i)=>{tb.visible=true;tb.position.set((i-1)*0.72,0.34,2.35);});
   hideArc();
+  startBgMusic();
 }
 function endGame() {
   gameActive=false; powering=false;
+  stopBgMusic(); sfx('gameover');
   pwWrap.style.display='none'; hideArc();
   pool.forEach(b=>{b.active=false;b.mesh.visible=false;b.blob.visible=false;});
   const rate=shots>0?Math.round(scored/shots*100):0;
@@ -522,6 +602,7 @@ function tick() {
   if (gameActive&&timeLeft<=10) {
     const blink=Math.sin(ledT*9)>0;
     leds.forEach(l=>{l.material.opacity=blink?0.95:0.15;l.material.needsUpdate=true;});
+    const sec=Math.ceil(timeLeft); if(sec!==_tickSec&&sec>0){_tickSec=sec;sfx('tick');}
   }
   if (bbFlashTimer>0){bbFlashTimer-=dt;if(bbFlashTimer<=0){bbMat.color.set(0xd8eeff);bbMat.opacity=0.78;}}
 
