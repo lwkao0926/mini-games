@@ -137,12 +137,9 @@ const PC_C=0.094,PC_S=0.078;
 const W=()=>window.innerWidth,H=()=>window.innerHeight;
 
 const POCKETS=[
-  {x:-(TW/2+PC_C*.45),z:-(TL/2+PC_C*.45),r:PC_C},
-  {x: (TW/2+PC_C*.45),z:-(TL/2+PC_C*.45),r:PC_C},
-  {x:-(TW/2+PC_S*.15),z:0,                r:PC_S},
-  {x: (TW/2+PC_S*.15),z:0,                r:PC_S},
-  {x:-(TW/2+PC_C*.45),z: (TL/2+PC_C*.45),r:PC_C},
-  {x: (TW/2+PC_C*.45),z: (TL/2+PC_C*.45),r:PC_C},
+  {x:-TW/2,z:-TL/2,r:0.105},{x:TW/2,z:-TL/2,r:0.105},
+  {x:-TW/2,z:0,    r:0.090},{x:TW/2,z:0,    r:0.090},
+  {x:-TW/2,z: TL/2,r:0.105},{x:TW/2,z: TL/2,r:0.105},
 ];
 
 const BDEFS=[
@@ -217,23 +214,35 @@ const dotGeo=new THREE.CircleGeometry(0.009,16);
 const dotMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.42});
 [TL/4,-TL/4,0].forEach(z=>{const d=new THREE.Mesh(dotGeo,dotMat.clone());d.rotation.x=-Math.PI/2;d.position.set(0,0.012,z);scene.add(d);});
 
-// Pockets
-const phMat=new THREE.MeshBasicMaterial({color:0x020208});
-const nPktMat=new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:0.48,side:THREE.DoubleSide});
+// Pockets – dark holes + neon ring + depth cylinder
+const phMat=new THREE.MeshBasicMaterial({color:0x010106});
+const nPktMat=new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:0.55,side:THREE.DoubleSide});
 POCKETS.forEach(({x,z,r})=>{
-  const ph=new THREE.Mesh(new THREE.CircleGeometry(r*.88,24),phMat);ph.rotation.x=-Math.PI/2;ph.position.set(x,0.002,z);scene.add(ph);
-  const pr=new THREE.Mesh(new THREE.RingGeometry(r*.84,r*.97,24),nPktMat.clone());pr.rotation.x=-Math.PI/2;pr.position.set(x,0.004,z);scene.add(pr);
+  const ph=new THREE.Mesh(new THREE.CircleGeometry(r*.92,28),phMat);ph.rotation.x=-Math.PI/2;ph.position.set(x,0.004,z);scene.add(ph);
+  const pr=new THREE.Mesh(new THREE.RingGeometry(r*.88,r,28),nPktMat.clone());pr.rotation.x=-Math.PI/2;pr.position.set(x,0.005,z);scene.add(pr);
+  const pc=new THREE.Mesh(new THREE.CylinderGeometry(r*.85,r*.85,.18,20),new THREE.MeshBasicMaterial({color:0x000000}));pc.position.set(x,-.08,z);scene.add(pc);
 });
 
-// Rails
+// Rails – split segments with pocket gaps so openings are visible
 const railMat=new THREE.MeshStandardMaterial({color:0x3a1605,roughness:0.65,metalness:0.12});
 const neonRM=()=>new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:0.52,blending:THREE.AdditiveBlending,depthWrite:false});
 function addRail(w,h,d,x,z){
   const r=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),railMat);r.position.set(x,h/2,z);r.castShadow=true;r.receiveShadow=true;scene.add(r);
   const ne=new THREE.Mesh(new THREE.BoxGeometry(w*.97,0.005,Math.min(w,d)*.9),neonRM());ne.position.set(x,h,z);scene.add(ne);
 }
-addRail(RW,RH,TL+RW*2,-(TW/2+RW/2),0);addRail(RW,RH,TL+RW*2,(TW/2+RW/2),0);
-addRail(TW+RW*2,RH,RW,0,-(TL/2+RW/2));addRail(TW+RW*2,RH,RW,0,(TL/2+RW/2));
+// Gap constants
+const CGZ=0.13,SGH=0.11; // corner gap (z), side half-gap (z)
+const LS=TL/2-CGZ-SGH;   // long segment length ≈ 0.88
+const LZ=SGH+LS/2;       // segment centre z offset ≈ 0.55
+const ES=TW-2*CGZ;       // short end rail length ≈ 0.86
+// Long side rails: 2 segments each, corner and side openings
+[-(TW/2+RW/2),(TW/2+RW/2)].forEach(rx=>{
+  addRail(RW,RH,LS,rx,-LZ);
+  addRail(RW,RH,LS,rx, LZ);
+});
+// Short end rails: single segment, corner openings on both sides
+addRail(ES,RH,RW,0,-(TL/2+RW/2));
+addRail(ES,RH,RW,0, (TL/2+RW/2));
 const tBody=new THREE.Mesh(new THREE.BoxGeometry(TW+RW*2+.04,.22,TL+RW*2+.04),new THREE.MeshStandardMaterial({color:0x260e03,roughness:.75}));
 tBody.position.y=-.12;scene.add(tBody);
 const legMat=new THREE.MeshStandardMaterial({color:0x1a0802,roughness:.7});
