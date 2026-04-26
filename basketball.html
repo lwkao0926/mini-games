@@ -131,12 +131,14 @@ const trimMat = new THREE.MeshStandardMaterial({ color:0x1a44ee, metalness:0.8, 
 });
 
 // Back wall
-scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3.4, 5.5, 0.14),
-  new THREE.MeshStandardMaterial({ color:0x060f28, roughness:0.9 })), { position: new THREE.Vector3(0, 2.75, -3.2) }));
+const backWallMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 5.5, 0.14),
+  new THREE.MeshStandardMaterial({ color:0x060f28, roughness:0.9 }));
+backWallMesh.position.set(0, 2.75, -3.2); scene.add(backWallMesh);
 
 // Arch + LEDs
-scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 1.0),
-  new THREE.MeshStandardMaterial({ color:0x040d24, metalness:0.5, roughness:0.3 })), { position: new THREE.Vector3(0, 5.55, -2.0) }));
+const archTopMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 1.0),
+  new THREE.MeshStandardMaterial({ color:0x040d24, metalness:0.5, roughness:0.3 }));
+archTopMesh.position.set(0, 5.55, -2.0); scene.add(archTopMesh);
 const ledMat = new THREE.MeshBasicMaterial({ color:0x22ddff, transparent:true, opacity:0.9 });
 const leds = [];
 for (let i = 0; i < 15; i++) {
