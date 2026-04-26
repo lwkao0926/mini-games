@@ -168,7 +168,7 @@ scene.background=new THREE.Color(0x07080f);
 scene.fog=new THREE.FogExp2(0x07080f,0.068);
 
 // ── Camera (orbit) ─────────────────────────────────────────────────
-let camTheta=0, camPhi=0.60, camDist=2.90;
+let camTheta=0, camPhi=0.38, camDist=2.50;
 let mode='orbit'; // declared early — updateCamera() checks it at init time
 const camTarget=new THREE.Vector3(0,0.05,0);
 const camera=new THREE.PerspectiveCamera(52,W()/H(),0.01,30);
@@ -333,7 +333,7 @@ let balls=[];
 function makeBall(def,x,z){
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(BR,32,32),
     new THREE.MeshStandardMaterial({map:makeBallTex(def.n,def.col,def.stripe),roughness:.30,metalness:.06}));
-  mesh.castShadow=true;scene.add(mesh);
+  mesh.castShadow=true;mesh.position.set(x,BR,z);scene.add(mesh);
   const body=new CANNON.Body({mass:.170,material:mBall,linearDamping:.58,angularDamping:.64});
   body.addShape(new CANNON.Sphere(BR));body.position.set(x,BR,z);world.addBody(body);
   const ball={mesh,body,n:def.n,pocketed:false,isCue:def.n===0};
