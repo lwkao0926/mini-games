@@ -429,11 +429,15 @@ function updateBall(b, dt) {
     // Out of bounds (should not happen now with back wall + ceiling)
     if (b.mesh.position.y < -1.0) { b.awaitReset=true; b.resetTimer=0; }
 
-    // Z-crossing score: ball must fall through the hoop plane (pz→bz crosses HOOP_Z)
-    if (!b.scoredThisShot && b.vel.y < -0.3 && pz > HOOP_Z && b.mesh.position.z <= HOOP_Z) {
+    // Z-crossing score: front approach OR backboard bounce-in
+    const crossFront = pz > HOOP_Z && b.mesh.position.z <= HOOP_Z;
+    const crossBoard = b.vel.z > 0 && pz < HOOP_Z && b.mesh.position.z >= HOOP_Z;
+    if (!b.scoredThisShot && b.vel.y < -0.3 && (crossFront || crossBoard)) {
       const fx=b.mesh.position.x, fz=b.mesh.position.z;
       const dxz2=Math.sqrt(fx*fx+(fz-HOOP_Z)*(fz-HOOP_Z));
-      if (dxz2 < RIM_R-RIM_TUBE && Math.abs(b.mesh.position.y-HOOP_Y) < 0.65) {
+      const fy=b.mesh.position.y;
+      const yFloor = crossBoard ? HOOP_Y-0.6 : HOOP_Y-BALL_R; // lenient for board, strict for front
+      if (dxz2 < RIM_R-RIM_TUBE && fy >= yFloor && fy < HOOP_Y+0.8) {
         b.scoredThisShot=true; scored++; streak++;
         if (scored>hiScore) hiScore=scored;
         flashRim(0x00ff88);
