@@ -70,10 +70,10 @@ scene.background = new THREE.Color(0x010c1a);
 scene.fog = new THREE.Fog(0x010c1a, 14, 26);
 
 // ── Camera — FRONT VIEW (player's eye looking into machine) ──
-const getFOV = () => W() < H() ? 66 : 50;
+const getFOV = () => W() < H() ? 70 : 52;
 const camera = new THREE.PerspectiveCamera(getFOV(), W()/H(), 0.1, 40);
-camera.position.set(0, 2.0, 5.8);
-camera.lookAt(0, 3.6, -1.8);
+camera.position.set(0, 0.9, 4.2);
+camera.lookAt(0, 3.0, -2.0);
 
 // ── Lights ──
 scene.add(new THREE.AmbientLight(0xffffff, 0.45));
@@ -325,23 +325,32 @@ function pUp(cx, cy) {
 window.addEventListener('mousedown',  e => pDown(e.clientX, e.clientY));
 window.addEventListener('mousemove',  e => pMove(e.clientX, e.clientY));
 window.addEventListener('mouseup',    e => pUp(e.clientX, e.clientY));
-window.addEventListener('touchstart', e => { e.preventDefault(); pDown(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-window.addEventListener('touchmove',  e => { e.preventDefault(); pMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-window.addEventListener('touchend',   e => { e.preventDefault(); pUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive:false});
+window.addEventListener('touchstart', e => {
+  if (e.target.closest('button')) return; // allow button taps
+  e.preventDefault(); pDown(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
+window.addEventListener('touchmove', e => { e.preventDefault(); pMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+window.addEventListener('touchend', e => {
+  if (e.target.closest('button')) return; // allow button taps
+  e.preventDefault(); pUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+}, {passive:false});
 
-// ── Score detection (clean through the hoop) ──
+// ── Score detection (ellipsoid zone around hoop — works rising OR falling) ──
 function checkScore() {
+  if (scoredThisShot || ball.position.y < 0.5) return;
   const {x:bx, y:by, z:bz} = ball.position;
-  if (vel.y < 0 && Math.abs(by - HOOP_Y) < 0.30) {
-    const hd = Math.sqrt(bx*bx + (bz-HOOP_Z)*(bz-HOOP_Z));
-    if (hd < RIM_R - 0.08 && !scoredThisShot) {
-      scoredThisShot = true; scored++; streak++;
-      if (scored > hiScore) hiScore = scored;
-      flashRim(0x00ff88);
-      if (streak >= 3) showPopup(`🔥 ${streak}連中！`, '#ff9900');
-      else if (streak === 2) showPopup('NICE! ×2 🔥', '#ffd700');
-      else showPopup('NICE! 🏀', '#00e5ff');
-    }
+  const RX = RIM_R - 0.06; // tight horizontal (must be inside rim)
+  const RY = 0.48;          // generous vertical
+  const RZ = 0.55;          // allow ball slightly in front/behind hoop plane
+  const score3D =
+    (bx/RX)**2 + ((by-HOOP_Y)/RY)**2 + ((bz-HOOP_Z)/RZ)**2 < 1;
+  if (score3D) {
+    scoredThisShot = true; scored++; streak++;
+    if (scored > hiScore) hiScore = scored;
+    flashRim(0x00ff88);
+    if (streak >= 3) showPopup(`🔥 ${streak}連中！`, '#ff9900');
+    else if (streak === 2) showPopup('NICE! ×2 🔥', '#ffd700');
+    else showPopup('NICE! 🏀', '#00e5ff');
   }
 }
 
@@ -477,8 +486,14 @@ function tick() {
       }
     }
 
+    // ── Front wall collision (stop ball coming back toward camera) ──
+    if (ball.position.z > 3.8 && vel.z > 0) {
+      vel.z = -vel.z * 0.30;
+      ball.position.z = 3.8;
+    }
+
     // ── Out-of-bounds reset ──
-    if (!awaitReset && (ball.position.z < -6.0 || ball.position.z > 7.0)) {
+    if (!awaitReset && (ball.position.z < -6.0 || ball.position.z > 5.0)) {
       awaitReset = true; resetTimer = 0;
     }
     if (!awaitReset && ball.position.y < -0.5) {
