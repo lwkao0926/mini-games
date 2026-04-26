@@ -36,6 +36,21 @@ canvas{display:block;}
 #pw-fill{height:100%;width:0%;background:linear-gradient(to right,#00cc44,#ffcc00,#ff3300);transition:width .04s linear;}
 #pw-lbl{color:#ffcc00;font-size:.76em;margin-top:3px;}
 
+/* Shoot button (left side, aim mode only) */
+@keyframes shoot-charge{0%,100%{box-shadow:0 0 16px #00aa44,inset 0 0 10px rgba(0,200,80,.2)}50%{box-shadow:0 0 36px #00ff66,inset 0 0 22px rgba(0,255,100,.4)}}
+@keyframes shoot-ready{0%,100%{box-shadow:0 0 26px #ff4400,inset 0 0 16px rgba(255,80,0,.3)}50%{box-shadow:0 0 55px #ff6600,inset 0 0 34px rgba(255,120,0,.5)}}
+#shoot-btn{position:fixed;left:14px;top:50%;transform:translateY(-50%);
+  width:76px;height:76px;border-radius:50%;z-index:12;display:none;
+  background:radial-gradient(circle at 38% 35%,#007733,#002211);
+  border:2.5px solid rgba(0,220,80,.65);
+  box-shadow:0 0 18px rgba(0,180,60,.5);
+  cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  color:#fff;font-size:.72em;font-weight:700;line-height:1.4;text-align:center;
+  font-family:'Microsoft JhengHei',sans-serif;}
+#shoot-btn.charging{animation:shoot-charge .35s ease-in-out infinite;}
+#shoot-btn.ready{animation:shoot-ready .25s ease-in-out infinite;}
+
 /* Spin UI */
 #spin-wrap{position:fixed;bottom:68px;right:14px;z-index:11;display:none;text-align:center;}
 #spin-lbl{color:rgba(255,255,255,.55);font-size:.70em;margin-bottom:3px;}
@@ -122,6 +137,7 @@ canvas{display:block;}
 <div id="hud"><div style="font-size:.72em;color:#aaa;letter-spacing:.08em;">已入袋</div><div id="hud-score">0 / 15</div></div>
 <div id="pw-wrap"><div id="pw-bg"><div id="pw-fill"></div></div><div id="pw-lbl">0%</div></div>
 <div id="spin-wrap"><div id="spin-lbl">擊球點</div><canvas id="spin-cvs" width="84" height="84"></canvas></div>
+<div id="shoot-btn">🎱<br>擊球</div>
 <div id="hint">拖曳旋轉視角・點「進入瞄準」後出桿</div>
 <div id="msg"></div>
 <button id="mode-btn" class="to-aim">🎱 進入瞄準</button>
@@ -423,24 +439,43 @@ const hudScore=document.getElementById('hud-score');
 const startScreenEl=document.getElementById('start-screen');
 const goScreenEl=document.getElementById('go-screen');
 
+const shootBtnEl=document.getElementById('shoot-btn');
+let shootCharging=false;
+
+function startCharge(){
+  if(!gameActive||ballsMoving||mode!=='aim')return;
+  shootCharging=true;aimPower=0;isAiming=true;
+  shootBtnEl.classList.add('charging');
+}
+function releaseCharge(){
+  if(!shootCharging)return;
+  shootCharging=false;
+  shootBtnEl.classList.remove('charging','ready');
+  if(aimPower>.04&&!ballsMoving)shoot();else endAim();
+}
+shootBtnEl.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startCharge();});
+shootBtnEl.addEventListener('mouseup',e=>{e.preventDefault();e.stopPropagation();releaseCharge();});
+shootBtnEl.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();startCharge();},{passive:false});
+shootBtnEl.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();releaseCharge();},{passive:false});
+
 function setMode(m){
   mode=m;
   if(m==='orbit'){
     modeBadge.textContent='旋轉視角';modeBadge.className='orbit';
     modeBtn.textContent='🎱 進入瞄準';modeBtn.className='to-aim';
     pwWrap.style.display='none';spinWrap.style.display='none';
+    shootBtnEl.style.display='none';
     hintEl.textContent='拖曳旋轉視角・點「進入瞄準」後出桿';
     endAim();updateCamera();
   } else {
     modeBadge.textContent='瞄準模式';modeBadge.className='aim';
     modeBtn.textContent='↩ 旋轉視角';modeBtn.className='to-orbit';
     pwWrap.style.display='block';spinWrap.style.display='block';
-    hintEl.textContent='左右滑動瞄準・上下調整視角・按住蓄力・放開出桿';
-    // Auto-position camera behind cue ball
+    shootBtnEl.style.display='flex';
+    hintEl.textContent='拖曳調整瞄準・左側按鈕蓄力出桿';
     const cb=getCueBall();
     if(cb){
       const cbz=cb.body.position.z;
-      // Orient camera so it stands on the shooter's side facing the rack
       camTheta=(cbz>=0)?Math.PI:0;
       camPhi=0.92;
       aimAngle=camTheta;
@@ -541,17 +576,17 @@ let orbitLast=null,aimDragPrev=null;
 function onDown(cx,cy){
   if(!gameActive)return;
   if(mode==='aim'&&!ballsMoving){
-    mainDrag=true;aimDragPrev={x:cx,y:cy};
-    aimPower=0;isAiming=true;
+    aimDragPrev={x:cx,y:cy};
+    isAiming=true;
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   } else {
-    orbitLast={x:cx,y:cy}; // always allow orbit drag start
+    orbitLast={x:cx,y:cy};
   }
 }
 function onMove(cx,cy){
   if(!gameActive)return;
-  if(mode==='aim'&&mainDrag&&aimDragPrev&&!ballsMoving){
+  if(mode==='aim'&&aimDragPrev&&!ballsMoving){
     const dx=cx-aimDragPrev.x,dy=cy-aimDragPrev.y;
     camTheta-=dx*.008;aimAngle=camTheta;
     camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
@@ -567,19 +602,16 @@ function onMove(cx,cy){
   }
 }
 function onUp(){
-  if(mode==='aim'&&mainDrag){
-    mainDrag=false;aimDragPrev=null;
-    if(aimPower>.04&&!ballsMoving)shoot();else endAim();
-  }
+  aimDragPrev=null;
   orbitLast=null;
 }
-window.addEventListener('mousedown',e=>{if(e.target.closest('button,#spin-cvs'))return;onDown(e.clientX,e.clientY);});
+window.addEventListener('mousedown',e=>{if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;onDown(e.clientX,e.clientY);});
 window.addEventListener('mousemove',e=>onMove(e.clientX,e.clientY));
 window.addEventListener('mouseup',onUp);
-window.addEventListener('touchstart',e=>{if(e.target.closest('button,#spin-cvs'))return;e.preventDefault();onDown(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-window.addEventListener('touchmove',e=>{if(e.target.closest('#spin-cvs'))return;e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-window.addEventListener('touchend',e=>{if(e.target.closest('#spin-cvs'))return;e.preventDefault();onUp();},{passive:false});
-window.addEventListener('touchcancel',()=>{mainDrag=false;orbitLast=null;endAim();});
+window.addEventListener('touchstart',e=>{if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;e.preventDefault();onDown(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+window.addEventListener('touchmove',e=>{if(e.target.closest('#spin-cvs,#shoot-btn'))return;e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+window.addEventListener('touchend',e=>{if(e.target.closest('#spin-cvs,#shoot-btn'))return;e.preventDefault();onUp();},{passive:false});
+window.addEventListener('touchcancel',()=>{orbitLast=null;aimDragPrev=null;endAim();});
 
 // ── Audio ────────────────────────────────────────────────────────────
 let _ac=null;
@@ -686,13 +718,14 @@ function tick(){
     }
   }
   if(msgTimer>0){msgTimer-=dt;msgEl.style.opacity=String(Math.max(0,Math.min(1,msgTimer/.22)));}
-  // Auto-charge power while holding in aim mode
-  if(mode==='aim'&&mainDrag&&gameActive&&!ballsMoving){
+  // Auto-charge power while shoot button held
+  if(mode==='aim'&&shootCharging&&gameActive&&!ballsMoving){
     aimPower=Math.min(1.0,aimPower+dt/1.8);
     const pf=document.getElementById('pw-fill'),pl=document.getElementById('pw-lbl');
     pf.style.width=(aimPower*100)+'%';
     pl.textContent=Math.round(aimPower*100)+'%';
     pl.style.color=aimPower<.4?'#00cc44':aimPower<.75?'#ffcc00':'#ff3300';
+    if(aimPower>=0.95&&!shootBtnEl.classList.contains('ready'))shootBtnEl.classList.replace('charging','ready');
     const cb=getCueBall();
     if(cb&&isAiming)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   }
