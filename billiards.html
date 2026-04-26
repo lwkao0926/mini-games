@@ -410,22 +410,18 @@ function drawSpinUI(){
 }
 drawSpinUI();
 
-let spinDrag=false;
 function handleSpinPt(e){
   const rect=spinCvs.getBoundingClientRect();
-  const cx=(e.clientX||(e.touches&&e.touches[0].clientX)||0)-rect.left;
-  const cy=(e.clientY||(e.touches&&e.touches[0].clientY)||0)-rect.top;
+  const cx=e.clientX-rect.left,cy=e.clientY-rect.top;
   const R=spinCvs.width/2,dx=(cx-R)/(R-9),dy=-(cy-R)/(R-9);
   const len=Math.sqrt(dx*dx+dy*dy);
   spinX=len>1?dx/len:dx;spinY=len>1?dy/len:dy;
   drawSpinUI();
 }
-spinCvs.addEventListener('mousedown',e=>{spinDrag=true;handleSpinPt(e);},{passive:false});
-spinCvs.addEventListener('mousemove',e=>{if(spinDrag)handleSpinPt(e);});
-spinCvs.addEventListener('mouseup',()=>spinDrag=false);
-spinCvs.addEventListener('touchstart',e=>{e.stopPropagation();spinDrag=true;handleSpinPt(e);},{passive:false});
-spinCvs.addEventListener('touchmove',e=>{e.stopPropagation();if(spinDrag)handleSpinPt(e);},{passive:false});
-spinCvs.addEventListener('touchend',e=>{e.stopPropagation();spinDrag=false;},{passive:false});
+let spinPtId=null;
+spinCvs.addEventListener('pointerdown',e=>{e.preventDefault();spinCvs.setPointerCapture(e.pointerId);spinPtId=e.pointerId;handleSpinPt(e);});
+spinCvs.addEventListener('pointermove',e=>{if(spinPtId!==null&&e.pointerId===spinPtId)handleSpinPt(e);});
+spinCvs.addEventListener('pointerup',e=>{if(e.pointerId===spinPtId)spinPtId=null;});
 
 // ── Mode system ─────────────────────────────────────────────────────
 let gameActive=false,ballsMoving=false;
@@ -453,10 +449,9 @@ function releaseCharge(){
   shootBtnEl.classList.remove('charging','ready');
   if(aimPower>.04&&!ballsMoving)shoot();else endAim();
 }
-shootBtnEl.addEventListener('mousedown',e=>{e.preventDefault();startCharge();});
-shootBtnEl.addEventListener('mouseup',e=>{e.preventDefault();releaseCharge();});
-shootBtnEl.addEventListener('touchstart',e=>{e.preventDefault();startCharge();},{passive:false});
-shootBtnEl.addEventListener('touchend',e=>{e.preventDefault();releaseCharge();},{passive:false});
+shootBtnEl.addEventListener('pointerdown',e=>{e.preventDefault();shootBtnEl.setPointerCapture(e.pointerId);startCharge();});
+shootBtnEl.addEventListener('pointerup',e=>{e.preventDefault();releaseCharge();});
+shootBtnEl.addEventListener('pointercancel',()=>releaseCharge());
 
 function setMode(m){
   mode=m;orbitLast=null;shootCharging=false;
@@ -570,20 +565,24 @@ function shoot(){
   ballsMoving=true;shots++;sfx('shoot');endAim();setMode('orbit');
 }
 
-// ── Pointer handlers ─────────────────────────────────────────────────
+// ── Pointer handlers (canvas-scoped, pointer-capture based) ──────────
 let orbitLast=null;
-function onDown(cx,cy){
+const cvs=renderer.domElement;
+
+cvs.addEventListener('pointerdown',e=>{
   if(!gameActive)return;
-  orbitLast={x:cx,y:cy};
+  e.preventDefault();
+  cvs.setPointerCapture(e.pointerId);
+  orbitLast={x:e.clientX,y:e.clientY,id:e.pointerId};
   if(mode==='aim'&&!ballsMoving){
     isAiming=true;
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   }
-}
-function onMove(cx,cy){
-  if(!gameActive||!orbitLast)return;
-  const dx=cx-orbitLast.x,dy=cy-orbitLast.y;
+});
+cvs.addEventListener('pointermove',e=>{
+  if(!gameActive||!orbitLast||e.pointerId!==orbitLast.id)return;
+  const dx=e.clientX-orbitLast.x,dy=e.clientY-orbitLast.y;
   if(mode==='aim'&&!ballsMoving){
     camTheta-=dx*.008;aimAngle=camTheta;
     camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
@@ -593,18 +592,12 @@ function onMove(cx,cy){
     camTheta-=dx*.007;
     camPhi=Math.max(.22,Math.min(1.38,camPhi-dy*.006));
   }
-  updateCamera();orbitLast={x:cx,y:cy};
-}
-function onUp(){
-  orbitLast=null;
-}
-window.addEventListener('mousedown',e=>{if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;onDown(e.clientX,e.clientY);});
-window.addEventListener('mousemove',e=>onMove(e.clientX,e.clientY));
-window.addEventListener('mouseup',onUp);
-window.addEventListener('touchstart',e=>{if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;e.preventDefault();onDown(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-window.addEventListener('touchmove',e=>{if(e.target.closest('#spin-cvs,#shoot-btn'))return;e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
-window.addEventListener('touchend',e=>{e.preventDefault();onUp();},{passive:false});
-window.addEventListener('touchcancel',()=>{orbitLast=null;shootCharging=false;endAim();});
+  updateCamera();orbitLast={x:e.clientX,y:e.clientY,id:e.pointerId};
+});
+cvs.addEventListener('pointerup',e=>{
+  if(orbitLast&&e.pointerId===orbitLast.id)orbitLast=null;
+});
+cvs.addEventListener('pointercancel',()=>{orbitLast=null;shootCharging=false;endAim();});
 
 // ── Audio ────────────────────────────────────────────────────────────
 let _ac=null;
