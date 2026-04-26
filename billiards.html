@@ -168,16 +168,30 @@ scene.background=new THREE.Color(0x07080f);
 scene.fog=new THREE.FogExp2(0x07080f,0.068);
 
 // ── Camera (orbit) ─────────────────────────────────────────────────
-let camTheta=0, camPhi=0.75, camDist=2.25;
+let camTheta=0, camPhi=0.60, camDist=2.90;
 const camTarget=new THREE.Vector3(0,0.05,0);
 const camera=new THREE.PerspectiveCamera(52,W()/H(),0.01,30);
 function updateCamera(){
-  camera.position.set(
-    camDist*Math.sin(camPhi)*Math.sin(camTheta),
-    camDist*Math.cos(camPhi)+0.12,
-    camDist*Math.sin(camPhi)*Math.cos(camTheta)
-  );
-  camera.lookAt(camTarget);
+  if(mode==='aim'){
+    const cb=getCueBall();
+    if(cb){
+      const bx=cb.body.position.x,bz=cb.body.position.z;
+      const D=0.60;
+      camera.position.set(
+        bx-Math.sin(camTheta)*D,
+        BR+0.16+0.32*Math.cos(camPhi),
+        bz-Math.cos(camTheta)*D
+      );
+      camera.lookAt(bx+Math.sin(camTheta)*2.2,0.01,bz+Math.cos(camTheta)*2.2);
+    }
+  } else {
+    camera.position.set(
+      camDist*Math.sin(camPhi)*Math.sin(camTheta),
+      camDist*Math.cos(camPhi)+0.12,
+      camDist*Math.sin(camPhi)*Math.cos(camTheta)
+    );
+    camera.lookAt(camTarget);
+  }
 }
 updateCamera();
 
@@ -245,6 +259,15 @@ addRail(ES,RH,RW,0,-(TL/2+RW/2));
 addRail(ES,RH,RW,0, (TL/2+RW/2));
 const tBody=new THREE.Mesh(new THREE.BoxGeometry(TW+RW*2+.04,.22,TL+RW*2+.04),new THREE.MeshStandardMaterial({color:0x260e03,roughness:.75}));
 tBody.position.y=-.12;scene.add(tBody);
+// Outer apron border – continuous perimeter, frames pocket openings
+const apronMat=new THREE.MeshStandardMaterial({color:0x1e0a02,roughness:0.64,metalness:0.07});
+const AW=0.020;
+[-(TW/2+RW+AW/2),(TW/2+RW+AW/2)].forEach(ax=>{
+  const m=new THREE.Mesh(new THREE.BoxGeometry(AW,RH+0.004,TL+(RW+AW)*2),apronMat);m.position.set(ax,(RH+0.004)/2,0);scene.add(m);
+});
+[-(TL/2+RW+AW/2),(TL/2+RW+AW/2)].forEach(az=>{
+  const m=new THREE.Mesh(new THREE.BoxGeometry(TW+(RW+AW)*2,RH+0.004,AW),apronMat);m.position.set(0,(RH+0.004)/2,az);scene.add(m);
+});
 const legMat=new THREE.MeshStandardMaterial({color:0x1a0802,roughness:.7});
 [[-TW/2-.02,-TL/2-.02],[TW/2+.02,-TL/2-.02],[-TW/2-.02,TL/2+.02],[TW/2+.02,TL/2+.02]].forEach(([x,z])=>{
   const lg=new THREE.Mesh(new THREE.BoxGeometry(.065,.5,.065),legMat);lg.position.set(x,-.34,z);scene.add(lg);
@@ -407,12 +430,24 @@ function setMode(m){
     modeBtn.textContent='🎱 進入瞄準';modeBtn.className='to-aim';
     pwWrap.style.display='none';spinWrap.style.display='none';
     hintEl.textContent='拖曳旋轉視角・點「進入瞄準」後出桿';
-    endAim();
+    endAim();updateCamera();
   } else {
     modeBadge.textContent='瞄準模式';modeBadge.className='aim';
     modeBtn.textContent='↩ 旋轉視角';modeBtn.className='to-orbit';
     pwWrap.style.display='block';spinWrap.style.display='block';
-    hintEl.textContent='往母球後方拖曳蓄力・右下角設擊球點';
+    hintEl.textContent='左右滑動瞄準・上下調整視角・按住蓄力・放開出桿';
+    // Auto-position camera behind cue ball
+    const cb=getCueBall();
+    if(cb){
+      const cbz=cb.body.position.z;
+      // Orient camera so it stands on the shooter's side facing the rack
+      camTheta=(cbz>=0)?Math.PI:0;
+      camPhi=0.92;
+      aimAngle=camTheta;
+      isAiming=true;
+      showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+    }
+    updateCamera();
   }
 }
 modeBtn.addEventListener('click',()=>{if(!gameActive)return;setMode(mode==='orbit'?'aim':'orbit');});
@@ -464,11 +499,15 @@ function showAimDisplay(nx,nz,cb){
   });
   if(hitDist<15){ghostMesh.position.set(cb.x+nx*hitDist,BR,cb.z+nz*hitDist);ghostMesh.visible=true;}
   else ghostMesh.visible=false;
-  // Cue stick
-  const pull=.05+aimPower*.18;
-  cueGroup.position.set(cb.x-nx*(BR+pull+.5),.018,cb.z-nz*(BR+pull+.5));
-  cueGroup.rotation.y=-Math.atan2(nx,nz);
-  cueGroup.visible=true;
+  // Cue stick (only in orbit camera; behind-ball camera hides it)
+  if(mode!=='aim'){
+    const pull=.05+aimPower*.18;
+    cueGroup.position.set(cb.x-nx*(BR+pull+.5),.018,cb.z-nz*(BR+pull+.5));
+    cueGroup.rotation.y=-Math.atan2(nx,nz);
+    cueGroup.visible=true;
+  } else {
+    cueGroup.visible=false;
+  }
   // Power bar
   document.getElementById('pw-fill').style.width=(aimPower*100)+'%';
   const pwLbl=document.getElementById('pw-lbl');
@@ -498,20 +537,30 @@ function shoot(){
 }
 
 // ── Pointer handlers ─────────────────────────────────────────────────
-let orbitLast=null;
+let orbitLast=null,aimDragPrev=null;
 function onDown(cx,cy){
   if(!gameActive||ballsMoving)return;
   if(mode==='aim'){
-    mainDrag=true;mainDragCur=ptrToXZ(cx,cy);
-    updateAimFromPt(mainDragCur);
+    mainDrag=true;aimDragPrev={x:cx,y:cy};
+    aimPower=0;isAiming=true;
+    const cb=getCueBall();
+    if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   } else {
     orbitLast={x:cx,y:cy};
   }
 }
 function onMove(cx,cy){
   if(!gameActive||ballsMoving)return;
-  if(mode==='aim'&&mainDrag){
-    mainDragCur=ptrToXZ(cx,cy);updateAimFromPt(mainDragCur);
+  if(mode==='aim'&&mainDrag&&aimDragPrev){
+    const dx=cx-aimDragPrev.x,dy=cy-aimDragPrev.y;
+    // Left/right → rotate aim + camera follow
+    camTheta-=dx*.008;aimAngle=camTheta;
+    // Up/down → adjust camera vertical angle
+    camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
+    aimDragPrev={x:cx,y:cy};
+    const cb=getCueBall();
+    if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+    updateCamera();
   } else if(mode==='orbit'&&orbitLast){
     const dx=cx-orbitLast.x,dy=cy-orbitLast.y;
     camTheta-=dx*.007;
@@ -521,7 +570,7 @@ function onMove(cx,cy){
 }
 function onUp(){
   if(mode==='aim'&&mainDrag){
-    mainDrag=false;
+    mainDrag=false;aimDragPrev=null;
     if(aimPower>.04&&!ballsMoving)shoot();else endAim();
   }
   orbitLast=null;
@@ -639,7 +688,16 @@ function tick(){
     }
   }
   if(msgTimer>0){msgTimer-=dt;msgEl.style.opacity=String(Math.max(0,Math.min(1,msgTimer/.22)));}
-  if(mode==='aim'&&isAiming&&mainDragCur){const cb=getCueBall();if(cb)updateAimFromPt(mainDragCur);}
+  // Auto-charge power while holding in aim mode
+  if(mode==='aim'&&mainDrag&&gameActive&&!ballsMoving){
+    aimPower=Math.min(1.0,aimPower+dt/1.8);
+    const pf=document.getElementById('pw-fill'),pl=document.getElementById('pw-lbl');
+    pf.style.width=(aimPower*100)+'%';
+    pl.textContent=Math.round(aimPower*100)+'%';
+    pl.style.color=aimPower<.4?'#00cc44':aimPower<.75?'#ffcc00':'#ff3300';
+    const cb=getCueBall();
+    if(cb&&isAiming)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+  }
   renderer.render(scene,camera);
 }
 
