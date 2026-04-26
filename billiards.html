@@ -169,6 +169,7 @@ scene.fog=new THREE.FogExp2(0x07080f,0.068);
 
 // ── Camera (orbit) ─────────────────────────────────────────────────
 let camTheta=0, camPhi=0.60, camDist=2.90;
+let mode='orbit'; // declared early — updateCamera() checks it at init time
 const camTarget=new THREE.Vector3(0,0.05,0);
 const camera=new THREE.PerspectiveCamera(52,W()/H(),0.01,30);
 function updateCamera(){
@@ -411,7 +412,6 @@ spinCvs.addEventListener('touchmove',e=>{e.stopPropagation();if(spinDrag)handleS
 spinCvs.addEventListener('touchend',e=>{e.stopPropagation();spinDrag=false;},{passive:false});
 
 // ── Mode system ─────────────────────────────────────────────────────
-let mode='orbit'; // 'orbit' | 'aim'
 let gameActive=false,ballsMoving=false;
 const modeBadge=document.getElementById('mode-badge');
 const modeBtn=document.getElementById('mode-btn');
