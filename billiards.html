@@ -533,35 +533,33 @@ function shoot(){
     rollV*spinX*.45,      // Y: sidespin
      dx*rollV*spinY       // Z: topspin/backspin axis
   );
-  ballsMoving=true;shots++;sfx('shoot');endAim();
+  ballsMoving=true;shots++;sfx('shoot');endAim();setMode('orbit');
 }
 
 // ── Pointer handlers ─────────────────────────────────────────────────
 let orbitLast=null,aimDragPrev=null;
 function onDown(cx,cy){
-  if(!gameActive||ballsMoving)return;
-  if(mode==='aim'){
+  if(!gameActive)return;
+  if(mode==='aim'&&!ballsMoving){
     mainDrag=true;aimDragPrev={x:cx,y:cy};
     aimPower=0;isAiming=true;
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   } else {
-    orbitLast={x:cx,y:cy};
+    orbitLast={x:cx,y:cy}; // always allow orbit drag start
   }
 }
 function onMove(cx,cy){
-  if(!gameActive||ballsMoving)return;
-  if(mode==='aim'&&mainDrag&&aimDragPrev){
+  if(!gameActive)return;
+  if(mode==='aim'&&mainDrag&&aimDragPrev&&!ballsMoving){
     const dx=cx-aimDragPrev.x,dy=cy-aimDragPrev.y;
-    // Left/right → rotate aim + camera follow
     camTheta-=dx*.008;aimAngle=camTheta;
-    // Up/down → adjust camera vertical angle
     camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
     aimDragPrev={x:cx,y:cy};
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
     updateCamera();
-  } else if(mode==='orbit'&&orbitLast){
+  } else if(orbitLast){ // orbit works anytime (including while balls rolling)
     const dx=cx-orbitLast.x,dy=cy-orbitLast.y;
     camTheta-=dx*.007;
     camPhi=Math.max(.22,Math.min(1.38,camPhi-dy*.006));
