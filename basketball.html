@@ -244,6 +244,90 @@ const trimMat = new THREE.MeshStandardMaterial({ color:0x1a44ee, metalness:0.8, 
   const aN2=new THREE.Mesh(new THREE.BoxGeometry(3.3,0.04,0.04),mk(0xff6600,.55));aN2.position.set(0,5.24,-2.0);scene.add(aN2);
 })();
 
+// ── Chain-link fence texture (diamond diagonal grid)
+function makeChainLinkTex(){
+  const sz=72,c=document.createElement('canvas');c.width=c.height=sz;
+  const ctx=c.getContext('2d');
+  // Dark steel background tint
+  ctx.fillStyle='rgba(10,20,50,0.30)';ctx.fillRect(0,0,sz,sz);
+  // Diagonal wires
+  ctx.strokeStyle='rgba(130,170,255,0.68)';ctx.lineWidth=1.5;
+  for(let i=-sz;i<sz*2;i+=14){
+    ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i+sz,sz);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(i,sz);ctx.lineTo(i+sz,0);ctx.stroke();
+  }
+  // Horizontal guide wire every 14px
+  ctx.strokeStyle='rgba(100,140,220,0.30)';ctx.lineWidth=0.8;
+  for(let y=0;y<sz;y+=14){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(sz,y);ctx.stroke();}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(5,2.5);return t;
+}
+
+// ── Arena illustration back wall canvas
+function makeArenaWallTex(){
+  const W=512,H=320,c=document.createElement('canvas');c.width=W;c.height=H;
+  const ctx=c.getContext('2d');
+  // Deep dark base
+  ctx.fillStyle='#03001a';ctx.fillRect(0,0,W,H);
+  // Spotlight cone from ceiling
+  const sp=ctx.createRadialGradient(W/2,-20,0,W/2,-20,H*1.15);
+  sp.addColorStop(0,'rgba(255,215,140,0.32)');
+  sp.addColorStop(0.4,'rgba(60,20,200,0.09)');
+  sp.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sp;ctx.fillRect(0,0,W,H);
+  // Left/right dark banner panels
+  [[0,88],[W-88,88]].forEach(([x,w])=>{
+    const g=ctx.createLinearGradient(x,0,x+w*(x===0?1:-1),0);
+    g.addColorStop(0,'rgba(0,8,80,0.92)');g.addColorStop(1,'rgba(0,8,80,0)');
+    ctx.fillStyle=g;ctx.fillRect(x,0,w,H);
+  });
+  // Neon vertical lines on banners
+  ctx.strokeStyle='rgba(0,110,255,0.75)';ctx.lineWidth=2;
+  [16,36,W-36,W-16].forEach(x=>{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();});
+  ctx.strokeStyle='rgba(255,60,180,0.40)';ctx.lineWidth=1;
+  [26,W-26].forEach(x=>{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();});
+  // Crowd silhouette tiers (3 rows)
+  [[H*0.52,17,0],[H*0.65,13,1],[H*0.77,10,2]].forEach(([y,r,ri])=>{
+    // Row backdrop
+    const rg=ctx.createLinearGradient(0,y-r*1.2,0,y+r*0.6);
+    rg.addColorStop(0,`rgba(${5-ri},0,${40-ri*10},0.85)`);
+    rg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=rg;ctx.fillRect(0,y-r*1.2,W,r*2.2);
+    // Individual silhouettes
+    ctx.fillStyle=`rgba(${6-ri*2},0,${48-ri*12},0.97)`;
+    for(let x=r*0.6;x<W;x+=r*2.1){
+      ctx.beginPath();ctx.ellipse(x,y,r*0.55,r*0.85,0,Math.PI,0);ctx.fill();
+      ctx.fillRect(x-r*0.42,y,r*0.84,r*0.42);
+    }
+  });
+  // Bold orange/red stripe at bottom (American street art)
+  const sg2=ctx.createLinearGradient(0,H*0.83,0,H);
+  sg2.addColorStop(0,'rgba(255,55,0,0.85)');
+  sg2.addColorStop(0.6,'rgba(200,30,0,0.25)');
+  sg2.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg2;ctx.fillRect(0,H*0.83,W,H);
+  // Horizontal accent dividers
+  ctx.strokeStyle='rgba(255,85,0,0.52)';ctx.lineWidth=2.5;
+  [H*0.49,H*0.53].forEach(y=>{ctx.beginPath();ctx.moveTo(88,y);ctx.lineTo(W-88,y);ctx.stroke();});
+  // Bold graphic "ARENA" text (American illustration style)
+  ctx.font='bold italic 28px Arial Black,Arial';
+  ctx.fillStyle='rgba(255,255,255,0.055)';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('BASKETBALL ARENA',W/2,H*0.31);
+  return new THREE.CanvasTexture(c);
+}
+
+// Apply illustration plane over back wall
+const _arenaPlane=new THREE.Mesh(new THREE.PlaneGeometry(3.44,5.55),
+  new THREE.MeshBasicMaterial({map:makeArenaWallTex(),transparent:true,opacity:0.97,depthWrite:false}));
+_arenaPlane.position.set(0,2.75,-3.12);scene.add(_arenaPlane);
+
+// Chain-link fence on side walls
+const _clTex=makeChainLinkTex();
+[-1.52,1.52].forEach(x=>{
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(11.2,5.6),
+    new THREE.MeshBasicMaterial({map:_clTex,transparent:true,opacity:0.68,depthWrite:false,side:THREE.DoubleSide}));
+  m.rotation.y=Math.PI/2;m.position.set(x,2.75,-0.5);scene.add(m);
+});
+
 // Back wall
 const backWallMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 5.5, 0.14),
   new THREE.MeshStandardMaterial({ color:0x060f28, roughness:0.9 }));
@@ -520,38 +604,75 @@ function sfx(type,vol=1){
 
 // ── Background Music ──
 let _bgOn=false,_bgNext=0,_bgStep=0;
-const BG_BPM=124,BG_B=60/BG_BPM;
-const BG_BASS=[65.41,65.41,73.42,73.42,55.00,55.00,87.31,98.00];
-const BG_MEL =[523.25,659.25,783.99,659.25,392.00,523.25,659.25,587.33];
+const BG_BPM=142, BG_B=60/BG_BPM;
+// Driving bass line (punchy, range-spanning)
+const BG_BASS=[65.41,82.41,73.42,87.31, 55.00,73.42,87.31,110.00];
+// Energetic 8-step melody (all steps active)
+const BG_MEL =[784,1047,880,659, 523,784,1047,880];
 function _bgTick(){
   if(!_bgOn)return;
   const c=ac(),now=c.currentTime;
   while(_bgNext<now+0.35){
     const t=_bgNext,s=_bgStep%8;
-    // Bass
-    const bo=c.createOscillator();bo.type='sawtooth';bo.frequency.value=BG_BASS[s];
-    const bg=c.createGain();bg.gain.setValueAtTime(0.11,t);bg.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.75);
+    // Bass — square+sawtooth layered for punch
+    const bo=c.createOscillator();bo.type='square';bo.frequency.value=BG_BASS[s];
+    const bg=c.createGain();bg.gain.setValueAtTime(0.14,t);bg.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.65);
     bo.connect(bg);bg.connect(mg());bo.start(t);bo.stop(t+BG_B);
-    // Melody (every 2 steps)
+    const bo2=c.createOscillator();bo2.type='sawtooth';bo2.frequency.value=BG_BASS[s]*2;
+    const bg2=c.createGain();bg2.gain.setValueAtTime(0.06,t);bg2.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.45);
+    bo2.connect(bg2);bg2.connect(mg());bo2.start(t);bo2.stop(t+BG_B);
+    // Melody — every step, triangle+sine blend
+    const mo=c.createOscillator();mo.type='triangle';mo.frequency.value=BG_MEL[s];
+    const mm=c.createGain();mm.gain.setValueAtTime(0,t);mm.gain.linearRampToValueAtTime(0.085,t+0.02);mm.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.88);
+    mo.connect(mm);mm.connect(mg());mo.start(t);mo.stop(t+BG_B);
+    // Chord stab on beats 0,2,4,6 (power chord = root + fifth)
     if(s%2===0){
-      const mo=c.createOscillator();mo.type='triangle';mo.frequency.value=BG_MEL[s/2]||523;
-      const mg2=c.createGain();mg2.gain.setValueAtTime(0,t);mg2.gain.linearRampToValueAtTime(0.07,t+0.03);mg2.gain.exponentialRampToValueAtTime(0.001,t+BG_B*1.9);
-      mo.connect(mg2);mg2.connect(mg());mo.start(t);mo.stop(t+BG_B*2);
+      const fifth=BG_MEL[s]*1.5;
+      const cs=c.createOscillator();cs.type='square';cs.frequency.value=fifth;
+      const cg=c.createGain();cg.gain.setValueAtTime(0,t);cg.gain.linearRampToValueAtTime(0.045,t+0.01);cg.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.30);
+      cs.connect(cg);cg.connect(mg());cs.start(t);cs.stop(t+BG_B*0.35);
     }
-    // Hi-hat
-    const hb=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);
-    const hd=hb.getChannelData(0);for(let i=0;i<hd.length;i++)hd[i]=(Math.random()*2-1)*(1-i/hd.length);
-    const hs=c.createBufferSource();hs.buffer=hb;
-    const hf=c.createBiquadFilter();hf.type='highpass';hf.frequency.value=9000;
-    const hg=c.createGain();hg.gain.setValueAtTime(0.055,t);hg.gain.exponentialRampToValueAtTime(0.001,t+0.04);
-    hs.connect(hf);hf.connect(hg);hg.connect(mg());hs.start(t);hs.stop(t+0.04);
-    // Kick (beat 0,4)
-    if(s===0||s===4){const ko=c.createOscillator();ko.type='sine';ko.frequency.setValueAtTime(175,t);ko.frequency.exponentialRampToValueAtTime(38,t+0.16);const kg=c.createGain();kg.gain.setValueAtTime(0.28,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.16);ko.connect(kg);kg.connect(mg());ko.start(t);ko.stop(t+0.16);}
-    // Snare (beat 2,6)
-    if(s===2||s===6){const sb=c.createBuffer(1,Math.ceil(c.sampleRate*0.12),c.sampleRate);const sd=sb.getChannelData(0);for(let i=0;i<sd.length;i++)sd[i]=(Math.random()*2-1)*(1-i/sd.length);const ss=c.createBufferSource();ss.buffer=sb;const sf=c.createBiquadFilter();sf.type='bandpass';sf.frequency.value=1800;sf.Q.value=1;const sg=c.createGain();sg.gain.setValueAtTime(0.14,t);sg.gain.exponentialRampToValueAtTime(0.001,t+0.12);ss.connect(sf);sf.connect(sg);sg.connect(mg());ss.start(t);ss.stop(t+0.12);}
+    // Hi-hat — 16th-note feel (every step + off-beat accent)
+    const mkHat=(ti,vol)=>{
+      const hb=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);
+      const hd=hb.getChannelData(0);for(let i=0;i<hd.length;i++)hd[i]=(Math.random()*2-1)*(1-i/hd.length);
+      const hs=c.createBufferSource();hs.buffer=hb;
+      const hf=c.createBiquadFilter();hf.type='highpass';hf.frequency.value=9500;
+      const hg=c.createGain();hg.gain.setValueAtTime(vol,ti);hg.gain.exponentialRampToValueAtTime(0.001,ti+0.04);
+      hs.connect(hf);hf.connect(hg);hg.connect(mg());hs.start(ti);hs.stop(ti+0.04);
+    };
+    mkHat(t,0.080);
+    mkHat(t+BG_B*0.5,0.040); // off-beat 16th
+    // Kick (beats 0,2,4,6 — double-time feel)
+    if(s%2===0){
+      const ko=c.createOscillator();ko.type='sine';ko.frequency.setValueAtTime(200,t);ko.frequency.exponentialRampToValueAtTime(35,t+0.18);
+      const kg=c.createGain();kg.gain.setValueAtTime(0.42,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+      ko.connect(kg);kg.connect(mg());ko.start(t);ko.stop(t+0.18);
+    }
+    // Extra kick on beat 3 (driving "4-on-the-floor" feel)
+    if(s===3||s===7){
+      const ko2=c.createOscillator();ko2.type='sine';ko2.frequency.setValueAtTime(160,t);ko2.frequency.exponentialRampToValueAtTime(32,t+0.12);
+      const kg2=c.createGain();kg2.gain.setValueAtTime(0.26,t);kg2.gain.exponentialRampToValueAtTime(0.001,t+0.12);
+      ko2.connect(kg2);kg2.connect(mg());ko2.start(t);ko2.stop(t+0.12);
+    }
+    // Snare (beats 2,6)
+    if(s===2||s===6){
+      const sb=c.createBuffer(1,Math.ceil(c.sampleRate*0.14),c.sampleRate);
+      const sd=sb.getChannelData(0);for(let i=0;i<sd.length;i++)sd[i]=(Math.random()*2-1)*(1-i/sd.length);
+      const ss=c.createBufferSource();ss.buffer=sb;
+      const sf=c.createBiquadFilter();sf.type='bandpass';sf.frequency.value=2000;sf.Q.value=1.2;
+      const sg=c.createGain();sg.gain.setValueAtTime(0.24,t);sg.gain.exponentialRampToValueAtTime(0.001,t+0.14);
+      ss.connect(sf);sf.connect(sg);sg.connect(mg());ss.start(t);ss.stop(t+0.14);
+      // Snare ghost on beat (soft)
+      const sb2=c.createBuffer(1,Math.ceil(c.sampleRate*0.06),c.sampleRate);
+      const sd2=sb2.getChannelData(0);for(let i=0;i<sd2.length;i++)sd2[i]=(Math.random()*2-1)*(1-i/sd2.length);
+      const ss2=c.createBufferSource();ss2.buffer=sb2;
+      const sg2=c.createGain();sg2.gain.setValueAtTime(0.07,t+BG_B*0.5);sg2.gain.exponentialRampToValueAtTime(0.001,t+BG_B*0.5+0.06);
+      ss2.connect(sg2);sg2.connect(mg());ss2.start(t+BG_B*0.5);ss2.stop(t+BG_B*0.5+0.06);
+    }
     _bgNext+=BG_B;_bgStep++;
   }
-  setTimeout(_bgTick,80);
+  setTimeout(_bgTick,75);
 }
 function startBgMusic(){if(_bgOn)return;_bgOn=true;_bgNext=ac().currentTime+0.1;_bgStep=0;_bgTick();}
 function stopBgMusic(){_bgOn=false;}
