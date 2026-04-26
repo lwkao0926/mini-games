@@ -343,13 +343,14 @@ window.addEventListener('touchend', e=>{
 },{passive:false});
 window.addEventListener('touchcancel', pUp);
 
-// ── Score: ball must be FALLING through the hoop opening ──
+// ── Score: ball must FALL through hoop opening (checked after all collisions) ──
 function checkScore(b) {
-  if (b.scoredThisShot || b.vel.y>=0) return;
-  const {x,y,z}=b.mesh.position;
-  if (y>HOOP_Y+BALL_R || y<HOOP_Y-BALL_R*2.5) return;
-  const dxz=Math.sqrt(x*x+(z-HOOP_Z)*(z-HOOP_Z));
-  if (dxz < RIM_R*0.76) {
+  if (b.scoredThisShot || b.vel.y >= -0.3) return; // must be clearly falling
+  const {x,y,z} = b.mesh.position;
+  // tight window: ball center crossing the rim plane from above
+  if (y > HOOP_Y + BALL_R * 0.7 || y < HOOP_Y - BALL_R * 1.8) return;
+  const dxz = Math.sqrt(x*x + (z-HOOP_Z)*(z-HOOP_Z));
+  if (dxz < RIM_R * 0.68) { // ≈0.30 — ball center well inside the rim
     b.scoredThisShot=true; scored++; streak++;
     if (scored>hiScore) hiScore=scored;
     flashRim(0x00ff88);
@@ -374,9 +375,7 @@ function updateBall(b, dt) {
     b.blob.scale.setScalar(Math.max(0.12,1-by*0.10));
     b.blob.material.opacity=Math.max(0.03,0.48-by*0.05);
 
-    checkScore(b);
-
-    // Backboard — very soft (0.20 restitution so ball doesn't fly back)
+    // Backboard — very soft (0.20 restitution)
     if (b.vel.z<0 && bz-BALL_R<=BB_FACE_Z && bz+BALL_R>BB_FACE_Z-0.08 &&
         Math.abs(bx)<0.88 && by>HOOP_Y-0.15 && by<HOOP_Y+1.05) {
       b.vel.z=Math.abs(b.vel.z)*0.20;
@@ -385,6 +384,13 @@ function updateBall(b, dt) {
       b.mesh.position.z=BB_FACE_Z+BALL_R+0.01;
       bbMat.color.set(0xffffff); bbMat.opacity=1.0; bbFlashTimer=0.18;
       if (!b.scoredThisShot&&popTimer<=0) showPopup('BOARD!','#88ccff');
+    }
+
+    // Back wall — blocks ball from escaping behind backboard
+    if (b.mesh.position.z < -3.0 + BALL_R && b.vel.z < 0) {
+      b.vel.z = Math.abs(b.vel.z) * 0.15;
+      b.vel.x *= 0.85;
+      b.mesh.position.z = -3.0 + BALL_R;
     }
 
     // Rim (torus closest-point)
@@ -396,7 +402,7 @@ function updateBall(b, dt) {
         const nx=(bx-cpx)/cd, ny=(by-cpy)/cd, nz=(bz-cpz)/cd;
         const dot=b.vel.x*nx+b.vel.y*ny+b.vel.z*nz;
         if (dot<0) {
-          const e=0.35;
+          const e=0.25; // softer rim
           b.vel.x-=(1+e)*dot*nx; b.vel.y-=(1+e)*dot*ny; b.vel.z-=(1+e)*dot*nz;
           const ov=BALL_R+RIM_TUBE-cd;
           b.mesh.position.x+=nx*ov; b.mesh.position.y+=ny*ov; b.mesh.position.z+=nz*ov;
@@ -406,12 +412,19 @@ function updateBall(b, dt) {
     }
 
     // Side walls
-    if (Math.abs(bx)>WALL_HW-BALL_R) {
-      b.mesh.position.x=Math.sign(bx)*(WALL_HW-BALL_R);
+    if (Math.abs(b.mesh.position.x)>WALL_HW-BALL_R) {
+      b.mesh.position.x=Math.sign(b.mesh.position.x)*(WALL_HW-BALL_R);
       b.vel.x=-b.vel.x*0.40;
     }
 
-    // Front wall — highly absorptive, no bouncing back at camera
+    // Ceiling — stops balls flying up out of scene at high power
+    if (b.mesh.position.y > 5.2 - BALL_R && b.vel.y > 0) {
+      b.vel.y = -b.vel.y * 0.15;
+      b.vel.x *= 0.90; b.vel.z *= 0.90;
+      b.mesh.position.y = 5.2 - BALL_R;
+    }
+
+    // Front wall — highly absorptive
     if (b.mesh.position.z>3.8 && b.vel.z>0) {
       b.vel.z=-b.vel.z*0.10;
       b.vel.x*=0.80;
@@ -422,16 +435,17 @@ function updateBall(b, dt) {
     if (b.mesh.position.y<BALL_R) {
       b.mesh.position.y=BALL_R;
       if (Math.abs(b.vel.y)>0.8) {
-        b.vel.y=-b.vel.y*0.28; b.vel.x*=0.82; b.vel.z*=0.82;
+        b.vel.y=-b.vel.y*0.22; b.vel.x*=0.80; b.vel.z*=0.80; // less bouncy floor
       } else {
         b.vel.set(0,0,0); b.awaitReset=true; b.resetTimer=0;
       }
     }
 
-    // Out of bounds
-    if (b.mesh.position.z<-6.5 || b.mesh.position.y<-1.0) {
-      b.awaitReset=true; b.resetTimer=0;
-    }
+    // Out of bounds (should not happen now with back wall + ceiling)
+    if (b.mesh.position.y < -1.0) { b.awaitReset=true; b.resetTimer=0; }
+
+    // Score check AFTER all collisions — physically correct
+    checkScore(b);
   }
 
   // Miss + fade-out
