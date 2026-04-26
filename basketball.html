@@ -343,12 +343,12 @@ window.addEventListener('touchend', e=>{
 },{passive:false});
 window.addEventListener('touchcancel', pUp);
 
-// ── Score: ball must FALL through hoop opening (checked after all collisions) ──
+// ── Score: ball must FALL through hoop opening from above (checked after all collisions) ──
 function checkScore(b) {
   if (b.scoredThisShot || b.vel.y >= -0.3) return; // must be clearly falling
   const {x,y,z} = b.mesh.position;
-  // tight window: ball center crossing the rim plane from above
-  if (y > HOOP_Y + BALL_R * 0.7 || y < HOOP_Y - BALL_R * 1.8) return;
+  if (z > HOOP_Z + 0.3) return;  // must be at/past the hoop plane in z
+  if (y > HOOP_Y + BALL_R || y < HOOP_Y - BALL_R * 2.5) return;
   const dxz = Math.sqrt(x*x + (z-HOOP_Z)*(z-HOOP_Z));
   if (dxz < RIM_R * 0.68) { // ≈0.30 — ball center well inside the rim
     b.scoredThisShot=true; scored++; streak++;
@@ -393,9 +393,9 @@ function updateBall(b, dt) {
       b.mesh.position.z = -3.0 + BALL_R;
     }
 
-    // Rim (torus closest-point)
+    // Rim (torus closest-point) — gate: only when ball has passed the rim's front face
     const dxz=Math.sqrt(bx*bx+(bz-HOOP_Z)*(bz-HOOP_Z));
-    if (dxz>0.01) {
+    if (dxz>0.01 && b.mesh.position.z < HOOP_Z + RIM_R) {
       const cpx=bx*RIM_R/dxz, cpy=HOOP_Y, cpz=HOOP_Z+(bz-HOOP_Z)*RIM_R/dxz;
       const cd=Math.sqrt((bx-cpx)**2+(by-cpy)**2+(bz-cpz)**2);
       if (cd<BALL_R+RIM_TUBE) {
