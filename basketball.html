@@ -68,7 +68,9 @@ canvas { display:block; }
 }
 #vignette {
   position:fixed; inset:0; pointer-events:none; z-index:2;
-  background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.75) 100%);
+  background:
+    linear-gradient(to right, rgba(0,0,0,.78) 0%, transparent 28%, transparent 72%, rgba(0,0,0,.78) 100%),
+    radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(0,0,0,.55) 100%);
 }
 /* ── Start Screen ── */
 @keyframes bb-spin{0%{transform:translateY(0)rotate(0deg)}50%{transform:translateY(-16px)rotate(180deg)}100%{transform:translateY(0)rotate(360deg)}}
@@ -255,8 +257,21 @@ arm.rotation.set(Math.PI/2,0,0); arm.position.set(0,HOOP_Y+0.04,HOOP_Z-0.24); ho
 
 // Rim
 const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(RIM_R,0.032,12,64),
-  new THREE.MeshStandardMaterial({color:0xff5500,metalness:0.85,roughness:0.15}));
+  new THREE.MeshStandardMaterial({color:0xff5500,metalness:0.85,roughness:0.15,emissive:new THREE.Color(0xff2200),emissiveIntensity:0.6}));
 rimMesh.rotation.x=Math.PI/2; rimMesh.position.set(0,HOOP_Y,HOOP_Z); rimMesh.castShadow=true; hoopGroup.add(rimMesh);
+
+// Rim glow rings (additive blending — inner & outer halo)
+const _glowInner = new THREE.Mesh(
+  new THREE.TorusGeometry(RIM_R, 0.072, 8, 56),
+  new THREE.MeshBasicMaterial({color:0xff4400,transparent:true,opacity:0.22,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+);
+_glowInner.rotation.x=Math.PI/2; _glowInner.position.set(0,HOOP_Y,HOOP_Z); hoopGroup.add(_glowInner);
+
+const _glowOuter = new THREE.Mesh(
+  new THREE.TorusGeometry(RIM_R, 0.18, 8, 48),
+  new THREE.MeshBasicMaterial({color:0xff2200,transparent:true,opacity:0.08,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+);
+_glowOuter.rotation.x=Math.PI/2; _glowOuter.position.set(0,HOOP_Y,HOOP_Z); hoopGroup.add(_glowOuter);
 
 // Net
 (function(){
@@ -759,14 +774,14 @@ function tick() {
   homeBallMesh.position.set(ballHome.x, ballHome.y+Math.sin(et*2.2)*0.03, ballHome.z);
   homeBlob.position.set(ballHome.x,0.01,ballHome.z);
 
-  // Hoop left/right movement when timeLeft <= 40
-  if (gameActive && timeLeft <= 40 && timeLeft > 0) {
-    const prog = Math.min(1, (40 - timeLeft) / 30); // 0→1 over 30s
-    const amp  = 0.45 + prog * 0.65; // 0.45 → 1.1 (within WALL_HW-RIM_R)
-    const spd  = 1.1 + prog * 1.4;   // 1.1 → 2.5 rad/s
+  // Hoop left/right movement — full game, gradually speeds up
+  if (gameActive && timeLeft > 0) {
+    const prog = Math.min(1, (60 - timeLeft) / 50); // 0→1 over first 50s
+    const amp  = 0.20 + prog * 0.90; // 0.20 → 1.10
+    const spd  = 0.55 + prog * 1.85; // 0.55 → 2.40 rad/s
     hoopGroup.position.x = Math.sin(et * spd) * amp;
     rimLight.position.x = hoopGroup.position.x;
-  } else {
+  } else if (!gameActive) {
     hoopGroup.position.x = 0;
     rimLight.position.x = 0;
   }
