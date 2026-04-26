@@ -37,18 +37,22 @@ canvas { display:block; }
   color:rgba(255,255,255,.55); font-size:.9em; pointer-events:none; text-align:center; z-index:10; line-height:1.55;
 }
 #gameover {
-  position:fixed; inset:0; background:rgba(0,0,0,.90);
+  position:fixed; inset:0;
+  background:radial-gradient(ellipse at 50% 40%,#0d0050 0%,#050010 100%);
   flex-direction:column; align-items:center; justify-content:center;
-  color:#fff; display:none; z-index:20;
+  color:#fff; display:none; z-index:20; gap:4px;
 }
-#gameover h2 { font-size:2em; color:#ffd700; text-shadow:0 0 20px #ffd700; margin-bottom:6px; }
-#final-score { font-size:4em; font-weight:900; color:#ff6600; text-shadow:0 0 20px #ff6600; }
-#final-rate { margin-top:8px; font-size:.95em; opacity:.6; }
+#go-crown { font-size:2.6em; margin-bottom:2px; filter:drop-shadow(0 0 14px #ffd700) drop-shadow(0 0 30px #ff8800); animation:go-fade-in .5s ease-out; }
+#gameover h2 { font-size:2.6em; color:#ffd700; text-shadow:0 0 24px #ffd700,0 0 70px #ff8800; margin-bottom:2px; letter-spacing:.2em; animation:go-fade-in .5s .1s ease-out both; }
+#go-divider { width:220px; height:2px; background:linear-gradient(to right,transparent,#ff6600,transparent); margin:6px 0; animation:go-fade-in .5s .2s ease-out both; }
+#final-score { font-size:5.5em; font-weight:900; color:#ff6600; text-shadow:0 0 35px #ff4400,0 0 90px #ff2200; line-height:1; animation:go-fade-in .5s .3s ease-out both; }
+#final-rate { margin-top:6px; font-size:.98em; opacity:.65; letter-spacing:.06em; animation:go-fade-in .5s .4s ease-out both; }
 #replay-btn {
-  margin-top:28px; padding:14px 52px; font-size:1.15em; font-weight:700;
-  background:linear-gradient(135deg,#ff6200,#ff9500); color:#fff;
-  border:none; border-radius:50px; cursor:pointer; font-family:'Microsoft JhengHei',sans-serif;
-  box-shadow:0 4px 20px rgba(255,98,0,.5);
+  margin-top:24px; padding:15px 60px; font-size:1.2em; font-weight:700;
+  background:linear-gradient(135deg,#0044ff,#0099ff); color:#fff;
+  border:2px solid rgba(80,180,255,.5); border-radius:50px; cursor:pointer;
+  font-family:'Microsoft JhengHei',sans-serif; letter-spacing:.1em;
+  animation:btn-glow-blue 1.7s ease-in-out infinite;
 }
 #countdown {
   position:fixed; top:42%; left:50%; transform:translate(-50%,-50%) scale(1);
@@ -77,9 +81,14 @@ canvas { display:block; }
 @keyframes neon-pulse{0%,100%{opacity:1}50%{opacity:.65}}
 @keyframes btn-glow{0%,100%{box-shadow:0 0 22px #ff4400,0 4px 18px rgba(255,68,0,.7)}50%{box-shadow:0 0 55px #ff8800,0 4px 35px rgba(255,120,0,.95)}}
 @keyframes slide-up{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+@keyframes btn-glow-blue{0%,100%{box-shadow:0 0 22px #0055ff,0 4px 18px rgba(0,80,255,.7)}50%{box-shadow:0 0 55px #0099ff,0 4px 38px rgba(0,160,255,.95)}}
+@keyframes go-fade-in{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 #start-screen {
   position:fixed; inset:0;
-  background:radial-gradient(ellipse at 50% 38%,#07102e 0%,#000208 100%);
+  background:
+    repeating-linear-gradient(90deg,rgba(60,80,255,.05) 0px,transparent 1px,transparent 64px,rgba(60,80,255,.05) 65px),
+    repeating-linear-gradient(0deg,rgba(60,80,255,.05) 0px,transparent 1px,transparent 64px,rgba(60,80,255,.05) 65px),
+    radial-gradient(ellipse at 50% 38%,#07102e 0%,#000208 100%);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   z-index:30; gap:8px;
 }
@@ -117,12 +126,12 @@ canvas { display:block; }
 <div id="popup"></div>
 <div id="countdown"></div>
 <div id="pts-flash"></div>
-<div id="hint">按住蓄力　放開投籃</div>
+<div id="hint">按住蓄力　放開投籃　左右調方向</div>
 <div id="start-screen">
   <div id="s-ball">🏀</div>
   <h1 id="s-title">投 籃 機</h1>
   <p id="s-sub">BASKETBALL ARCADE</p>
-  <div id="s-info">按住螢幕蓄力，放開投籃<br>最後 10 秒進球 <span style="color:#ffd700;font-weight:900;text-shadow:0 0 10px #ffaa00">×3 分</span></div>
+  <div id="s-info">按住螢幕蓄力，放開投籃<br>左右移動調整投籃方向<br>最後 10 秒進球 <span style="color:#ffd700;font-weight:900;text-shadow:0 0 10px #ffaa00">×3 分</span></div>
   <button id="s-btn">開 始 遊 戲</button>
   <div id="s-dots">
     <span style="background:#ff3300;animation-delay:0s"></span>
@@ -135,7 +144,9 @@ canvas { display:block; }
   <p id="s-hi"></p>
 </div>
 <div id="gameover">
+  <div id="go-crown">🏆</div>
   <h2>時間到！</h2>
+  <div id="go-divider"></div>
   <div id="final-score"></div>
   <div id="final-rate"></div>
   <button id="replay-btn">再玩一次</button>
@@ -163,8 +174,16 @@ renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x010c1a);
-scene.fog = new THREE.Fog(0x010c1a, 14, 26);
+scene.background = new THREE.Color(0x000814);
+scene.fog = new THREE.Fog(0x000814, 13, 25);
+
+// Star field
+(function(){
+  const sg=new THREE.BufferGeometry(),sp=new Float32Array(350*3);
+  for(let i=0;i<350;i++){sp[i*3]=(Math.random()-.5)*24;sp[i*3+1]=0.5+Math.random()*8;sp[i*3+2]=-5-Math.random()*14;}
+  sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({size:0.045,color:0x88bbff,transparent:true,opacity:0.7,depthWrite:false,sizeAttenuation:true})));
+})();
 
 const getFOV = () => W() < H() ? 70 : 52;
 const camera = new THREE.PerspectiveCamera(getFOV(), W()/H(), 0.1, 40);
@@ -189,6 +208,16 @@ const flm = new THREE.LineBasicMaterial({ color: 0x8b5020, opacity: 0.35, transp
 [-0.75, 0, 0.75].forEach(x => scene.add(new THREE.Line(
   new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,.01,-5.5),new THREE.Vector3(x,.01,4.5)]), flm)));
 
+// Court markings — center circle + 3-point arc
+(function(){
+  const cm=new THREE.LineBasicMaterial({color:0x9b6030,opacity:0.55,transparent:true});
+  const ring=(cx,cz,r,n)=>{const pts=[];for(let i=0;i<=n;i++){const a=(i/n)*Math.PI*2;pts.push(new THREE.Vector3(cx+Math.cos(a)*r,0.01,cz+Math.sin(a)*r));}return pts;};
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring(0,1.0,0.50,36)),cm));
+  const arc=[];for(let i=0;i<=36;i++){const a=Math.PI+(i/36)*Math.PI;arc.push(new THREE.Vector3(Math.cos(a)*1.35,0.01,1.0+Math.sin(a)*1.35));}
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(arc),cm));
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1.35,0.01,1.0),new THREE.Vector3(1.35,0.01,1.0)]),cm));
+})();
+
 // Side walls
 const wallMat = new THREE.MeshStandardMaterial({ color: 0x041248, roughness: 0.4, metalness: 0.3 });
 [-1.67, 1.67].forEach(x => {
@@ -200,6 +229,20 @@ const trimMat = new THREE.MeshStandardMaterial({ color:0x1a44ee, metalness:0.8, 
   const t = new THREE.Mesh(new THREE.BoxGeometry(0.03, 5.5, 11.0), trimMat);
   t.position.set(x, 2.75, -0.5); scene.add(t);
 });
+
+// Neon wall accent strips
+(function(){
+  const mk=(col,op)=>new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false});
+  [[-1.60,0x0044ff],[1.60,0xff0077]].forEach(([x,col])=>{
+    [0.70,2.10,3.65].forEach(y=>{
+      const s=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.02,8.8),mk(col,.72));
+      s.position.set(x,y,-0.5);scene.add(s);
+    });
+  });
+  // Arch neon bars
+  const aN1=new THREE.Mesh(new THREE.BoxGeometry(3.3,0.04,0.04),mk(0x00eeff,.90));aN1.position.set(0,5.40,-2.0);scene.add(aN1);
+  const aN2=new THREE.Mesh(new THREE.BoxGeometry(3.3,0.04,0.04),mk(0xff6600,.55));aN2.position.set(0,5.24,-2.0);scene.add(aN2);
+})();
 
 // Back wall
 const backWallMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 5.5, 0.14),
@@ -260,18 +303,20 @@ const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(RIM_R,0.032,12,64),
   new THREE.MeshStandardMaterial({color:0xff5500,metalness:0.85,roughness:0.15,emissive:new THREE.Color(0xff2200),emissiveIntensity:0.6}));
 rimMesh.rotation.x=Math.PI/2; rimMesh.position.set(0,HOOP_Y,HOOP_Z); rimMesh.castShadow=true; hoopGroup.add(rimMesh);
 
-// Rim glow rings (additive blending — inner & outer halo)
-const _glowInner = new THREE.Mesh(
-  new THREE.TorusGeometry(RIM_R, 0.072, 8, 56),
-  new THREE.MeshBasicMaterial({color:0xff4400,transparent:true,opacity:0.22,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+// Backboard edge glow (additive blending planes in front of bb, face camera)
+const bbGlowInnerMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.84, 1.08),
+  new THREE.MeshBasicMaterial({color:0xff7700,transparent:true,opacity:0.40,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
 );
-_glowInner.rotation.x=Math.PI/2; _glowInner.position.set(0,HOOP_Y,HOOP_Z); hoopGroup.add(_glowInner);
+bbGlowInnerMesh.position.set(0, HOOP_Y+0.52, HOOP_Z-0.483);
+hoopGroup.add(bbGlowInnerMesh);
 
-const _glowOuter = new THREE.Mesh(
-  new THREE.TorusGeometry(RIM_R, 0.18, 8, 48),
-  new THREE.MeshBasicMaterial({color:0xff2200,transparent:true,opacity:0.08,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+const bbGlowOuterMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.20, 1.38),
+  new THREE.MeshBasicMaterial({color:0xff3300,transparent:true,opacity:0.11,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
 );
-_glowOuter.rotation.x=Math.PI/2; _glowOuter.position.set(0,HOOP_Y,HOOP_Z); hoopGroup.add(_glowOuter);
+bbGlowOuterMesh.position.set(0, HOOP_Y+0.52, HOOP_Z-0.481);
+hoopGroup.add(bbGlowOuterMesh);
 
 // Net
 (function(){
@@ -432,8 +477,8 @@ const POWER_DURATION=1.1;
 const popupEl    = document.getElementById('popup');
 const gameoverEl = document.getElementById('gameover');
 const hintEl     = document.getElementById('hint');
-document.getElementById('replay-btn').addEventListener('click', startGame);
-document.getElementById('replay-btn').addEventListener('touchend', e=>{e.preventDefault();startGame();});
+document.getElementById('replay-btn').addEventListener('click', () => { gameoverEl.style.display='none'; showStartScreen(); });
+document.getElementById('replay-btn').addEventListener('touchend', e => { e.preventDefault(); gameoverEl.style.display='none'; showStartScreen(); });
 
 function showPopup(txt,col){ popupEl.textContent=txt; popupEl.style.color=col; popupEl.style.opacity='1'; popTimer=1.1; }
 function flashRim(col){ rimMesh.material.color.set(col); setTimeout(()=>rimMesh.material.color.set(0xff5500),250); }
@@ -772,6 +817,10 @@ function tick() {
   // Home ball idle float
   const et=clock.getElapsedTime();
   homeBallMesh.position.set(ballHome.x, ballHome.y+Math.sin(et*2.2)*0.03, ballHome.z);
+
+  // Backboard edge glow pulse
+  bbGlowInnerMesh.material.opacity = 0.28 + 0.16 * Math.sin(et * 2.8);
+  bbGlowInnerMesh.material.needsUpdate = true;
   homeBlob.position.set(ballHome.x,0.01,ballHome.z);
 
   // Hoop left/right movement — full game, gradually speeds up
