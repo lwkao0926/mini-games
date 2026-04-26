@@ -170,20 +170,24 @@ function drawBoard(t, sc, hi, active) {
 }
 
 // Backboard
+// ── Hoop group (moves left/right when time < 40) ──
+const hoopGroup = new THREE.Group();
+scene.add(hoopGroup);
+
 const bbMat = new THREE.MeshStandardMaterial({ color:0xd8eeff, transparent:true, opacity:0.78, roughness:0.05 });
 const bb = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 0.05), bbMat);
-bb.position.set(0, HOOP_Y+0.52, HOOP_Z-0.52); bb.castShadow=true; scene.add(bb);
+bb.position.set(0, HOOP_Y+0.52, HOOP_Z-0.52); bb.castShadow=true; hoopGroup.add(bb);
 const sq = new THREE.Mesh(new THREE.BoxGeometry(0.52,0.40,0.04),
   new THREE.MeshStandardMaterial({color:0xff3300,transparent:true,opacity:0.5}));
-sq.position.set(0, HOOP_Y+0.45, HOOP_Z-0.50); scene.add(sq);
+sq.position.set(0, HOOP_Y+0.45, HOOP_Z-0.50); hoopGroup.add(sq);
 const metal = new THREE.MeshStandardMaterial({color:0xc8c8c8,metalness:0.9,roughness:0.15});
 const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.62,8), metal);
-arm.rotation.set(Math.PI/2,0,0); arm.position.set(0,HOOP_Y+0.04,HOOP_Z-0.24); scene.add(arm);
+arm.rotation.set(Math.PI/2,0,0); arm.position.set(0,HOOP_Y+0.04,HOOP_Z-0.24); hoopGroup.add(arm);
 
 // Rim
 const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(RIM_R,0.032,12,64),
   new THREE.MeshStandardMaterial({color:0xff5500,metalness:0.85,roughness:0.15}));
-rimMesh.rotation.x=Math.PI/2; rimMesh.position.set(0,HOOP_Y,HOOP_Z); rimMesh.castShadow=true; scene.add(rimMesh);
+rimMesh.rotation.x=Math.PI/2; rimMesh.position.set(0,HOOP_Y,HOOP_Z); rimMesh.castShadow=true; hoopGroup.add(rimMesh);
 
 // Net
 (function(){
@@ -192,9 +196,9 @@ rimMesh.rotation.x=Math.PI/2; rimMesh.position.set(0,HOOP_Y,HOOP_Z); rimMesh.cas
   const v=(a,r,yo)=>new THREE.Vector3(Math.cos(a)*r,HOOP_Y-yo,HOOP_Z+Math.sin(a)*r);
   for (let i=0;i<segs;i++){
     const a=(i/segs)*Math.PI*2, a2=((i+1)/segs)*Math.PI*2;
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a,topR,0),v(a,botR,netH)]),nm));
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a2,topR,0),v(a,botR,netH)]),nm));
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+    hoopGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a,topR,0),v(a,botR,netH)]),nm));
+    hoopGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(a2,topR,0),v(a,botR,netH)]),nm));
+    hoopGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
       v(a,topR*.62+botR*.38,netH*.45),v(a2,topR*.62+botR*.38,netH*.45)]),nm));
   }
 })();
@@ -435,8 +439,9 @@ function updateBall(b, dt) {
     b.blob.material.opacity=Math.max(0.03,0.48-by*0.05);
 
     // Backboard — very soft (0.20 restitution)
+    const hx=hoopGroup.position.x;
     if (b.vel.z<0 && bz-BALL_R<=BB_FACE_Z && bz+BALL_R>BB_FACE_Z-0.08 &&
-        Math.abs(bx)<0.88 && by>HOOP_Y-0.15 && by<HOOP_Y+1.05) {
+        Math.abs(bx-hx)<0.88 && by>HOOP_Y-0.15 && by<HOOP_Y+1.05) {
       b.vel.z=Math.abs(b.vel.z)*0.20;
       b.vel.x+=(Math.random()-0.5)*0.25;
       b.vel.y-=0.5;
@@ -454,10 +459,10 @@ function updateBall(b, dt) {
     }
 
     // Rim (torus closest-point) — gate: only near hoop z-range, not front approach zone
-    const dxz=Math.sqrt(bx*bx+(bz-HOOP_Z)*(bz-HOOP_Z));
+    const dxz=Math.sqrt((bx-hx)*(bx-hx)+(bz-HOOP_Z)*(bz-HOOP_Z));
     const dzh=Math.abs(bz-HOOP_Z);
     if (dxz>0.01 && dzh<RIM_R+RIM_TUBE && b.mesh.position.z < HOOP_Z + 0.10) {
-      const cpx=bx*RIM_R/dxz, cpy=HOOP_Y, cpz=HOOP_Z+(bz-HOOP_Z)*RIM_R/dxz;
+      const cpx=(bx-hx)*RIM_R/dxz+hx, cpy=HOOP_Y, cpz=HOOP_Z+(bz-HOOP_Z)*RIM_R/dxz;
       const cd=Math.sqrt((bx-cpx)**2+(by-cpy)**2+(bz-cpz)**2);
       if (cd<BALL_R+RIM_TUBE) {
         const nx=(bx-cpx)/cd, ny=(by-cpy)/cd, nz=(bz-cpz)/cd;
@@ -510,7 +515,7 @@ function updateBall(b, dt) {
     const crossBoard = b.vel.z > 0 && pz < HOOP_Z && b.mesh.position.z >= HOOP_Z;
     if (!b.scoredThisShot && b.vel.y < -0.3 && (crossFront || crossBoard)) {
       const fx=b.mesh.position.x, fz=b.mesh.position.z;
-      const dxz2=Math.sqrt(fx*fx+(fz-HOOP_Z)*(fz-HOOP_Z));
+      const dxz2=Math.sqrt((fx-hx)*(fx-hx)+(fz-HOOP_Z)*(fz-HOOP_Z));
       const fy=b.mesh.position.y;
       const yFloor = crossBoard ? HOOP_Y-0.6 : HOOP_Y-BALL_R; // lenient for board, strict for front
       if (dxz2 < RIM_R-RIM_TUBE && fy >= yFloor && fy < HOOP_Y+0.8) {
@@ -575,6 +580,7 @@ function startGame() {
   hintEl.style.opacity='.6';
   trayBalls.forEach((tb,i)=>{tb.visible=true;tb.position.set((i-1)*0.72,0.34,2.35);});
   hideArc();
+  hoopGroup.position.x = 0; rimLight.position.x = 0;
   startBgMusic();
 }
 function endGame() {
@@ -618,6 +624,18 @@ function tick() {
   const et=clock.getElapsedTime();
   homeBallMesh.position.set(ballHome.x, ballHome.y+Math.sin(et*2.2)*0.03, ballHome.z);
   homeBlob.position.set(ballHome.x,0.01,ballHome.z);
+
+  // Hoop left/right movement when timeLeft <= 40
+  if (gameActive && timeLeft <= 40 && timeLeft > 0) {
+    const prog = Math.min(1, (40 - timeLeft) / 30); // 0→1 over 30s
+    const amp  = 0.45 + prog * 0.65; // 0.45 → 1.1 (within WALL_HW-RIM_R)
+    const spd  = 1.1 + prog * 1.4;   // 1.1 → 2.5 rad/s
+    hoopGroup.position.x = Math.sin(et * spd) * amp;
+    rimLight.position.x = hoopGroup.position.x;
+  } else {
+    hoopGroup.position.x = 0;
+    rimLight.position.x = 0;
+  }
 
   // Pool balls
   pool.forEach(b=>updateBall(b,dt));
