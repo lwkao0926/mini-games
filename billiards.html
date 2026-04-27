@@ -454,7 +454,7 @@ shootBtnEl.addEventListener('pointerup',e=>{e.preventDefault();releaseCharge();}
 shootBtnEl.addEventListener('pointercancel',()=>releaseCharge());
 
 function setMode(m){
-  mode=m;orbitLast=null;shootCharging=false;
+  mode=m;_aimPrev=null;_aimPid=-1;shootCharging=false;
   if(m==='orbit'){
     camTheta=0;camPhi=0.38;
     modeBadge.textContent='俯瞰';modeBadge.className='orbit';
@@ -567,15 +567,14 @@ function shoot(){
 }
 
 // ── Pointer handlers (window-level) ──────────────────────────────────
-let orbitLast=null;
+let _aimPrev=null,_aimPid=-1;
 
 window.addEventListener('pointerdown',e=>{
   if(!gameActive)return;
   if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;
   e.preventDefault();
-  // Only track pointer in aim mode — orbit mode camera is fixed
   if(mode==='aim'&&!ballsMoving){
-    orbitLast={x:e.clientX,y:e.clientY,pid:e.pointerId};
+    _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
     isAiming=true;
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
@@ -584,25 +583,24 @@ window.addEventListener('pointerdown',e=>{
 window.addEventListener('pointermove',e=>{
   if(!gameActive||mode!=='aim'||ballsMoving)return;
   e.preventDefault();
-  if(!orbitLast){
-    // Missed pointerdown (e.g. finger came off a button) — bootstrap reference point
-    orbitLast={x:e.clientX,y:e.clientY,pid:e.pointerId};
+  // If no active pointer OR different pointer arrives, take it over (handles stale/missed pointerdown)
+  if(_aimPrev===null||_aimPid!==e.pointerId){
+    _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
     return;
   }
-  if(e.pointerId!==orbitLast.pid)return;
-  const dx=e.clientX-orbitLast.x,dy=e.clientY-orbitLast.y;
+  const dx=e.clientX-_aimPrev.x,dy=e.clientY-_aimPrev.y;
   camTheta-=dx*.008;aimAngle=camTheta;
   camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
   const cb=getCueBall();
   if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   updateCamera();
-  orbitLast={x:e.clientX,y:e.clientY,pid:e.pointerId};
+  _aimPrev={x:e.clientX,y:e.clientY};
 },{passive:false});
 window.addEventListener('pointerup',e=>{
-  if(orbitLast&&e.pointerId===orbitLast.pid)orbitLast=null;
+  if(e.pointerId===_aimPid){_aimPrev=null;_aimPid=-1;}
 });
 window.addEventListener('pointercancel',e=>{
-  if(orbitLast&&e.pointerId===orbitLast.pid){orbitLast=null;shootCharging=false;}
+  if(e.pointerId===_aimPid){_aimPrev=null;_aimPid=-1;shootCharging=false;}
 });
 
 // ── Audio ────────────────────────────────────────────────────────────
