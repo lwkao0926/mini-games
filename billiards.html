@@ -572,27 +572,55 @@ function shoot(){
   ballsMoving=true;shots++;sfx('shoot');endAim();setMode('orbit');
 }
 
-// ── Aim overlay – single reliable drag handler (div + setPointerCapture) ──
-// The overlay div (z-index:9) is shown only in aim mode.
-// UI buttons (z-index:10-12) sit above it, so they remain interactive.
-// setPointerCapture ensures all subsequent pointer events reach the overlay
-// even when the finger drifts over other elements – the most reliable
-// pattern on iOS Safari for canvas-based 3D interaction.
+// ── Aim overlay – drag handler ──────────────────────────────────────────
+// Overlay (z-index:9) is shown only in aim mode; buttons (z-index:10-12) sit
+// above it so they receive their own events normally.
+// Touch Events are used for mobile – the spec guarantees touchmove/touchend
+// always fire on the element where touchstart began, so no setPointerCapture
+// is needed and there is no risk of accidentally capturing the shoot button.
 let _aimPrev=null,_aimPid=-1;
 const aimOverlay=document.getElementById('aim-overlay');
 
-aimOverlay.addEventListener('pointerdown',e=>{
+// ── Mobile: Touch Events on overlay ─────────────────────────────────────
+aimOverlay.addEventListener('touchstart',e=>{
   if(!gameActive)return;
   e.preventDefault();
-  aimOverlay.setPointerCapture(e.pointerId);
-  _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
+  const t=e.changedTouches[0];
+  _aimPrev={x:t.clientX,y:t.clientY};_aimPid=t.identifier;
   isAiming=true;
   const cb=getCueBall();
   if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
 },{passive:false});
 
-aimOverlay.addEventListener('pointermove',e=>{
-  if(!gameActive||e.pointerId!==_aimPid||!_aimPrev)return;
+aimOverlay.addEventListener('touchmove',e=>{
+  if(!gameActive)return;
+  e.preventDefault();
+  const touch=Array.from(e.changedTouches).find(t=>t.identifier===_aimPid)||e.changedTouches[0];
+  if(!_aimPrev){_aimPrev={x:touch.clientX,y:touch.clientY};_aimPid=touch.identifier;return;}
+  const dx=touch.clientX-_aimPrev.x,dy=touch.clientY-_aimPrev.y;
+  camTheta-=dx*.008;aimAngle=camTheta;
+  camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
+  const cb=getCueBall();
+  if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+  updateCamera();
+  _aimPrev={x:touch.clientX,y:touch.clientY};
+},{passive:false});
+
+aimOverlay.addEventListener('touchend',e=>{_aimPrev=null;_aimPid=-1;});
+aimOverlay.addEventListener('touchcancel',e=>{_aimPrev=null;_aimPid=-1;shootCharging=false;});
+
+// ── Desktop: Mouse-only Pointer Events on window ─────────────────────────
+window.addEventListener('pointerdown',e=>{
+  if(e.pointerType!=='mouse'||!gameActive||mode!=='aim')return;
+  if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;
+  e.preventDefault();
+  _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
+  isAiming=true;
+  const cb=getCueBall();
+  if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+},{passive:false});
+window.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse'||!gameActive||mode!=='aim'||!_aimPrev||_aimPid!==e.pointerId)return;
   e.preventDefault();
   const dx=e.clientX-_aimPrev.x,dy=e.clientY-_aimPrev.y;
   camTheta-=dx*.008;aimAngle=camTheta;
@@ -602,15 +630,13 @@ aimOverlay.addEventListener('pointermove',e=>{
   updateCamera();
   _aimPrev={x:e.clientX,y:e.clientY};
 },{passive:false});
-
-aimOverlay.addEventListener('pointerup',e=>{
+window.addEventListener('pointerup',e=>{
+  if(e.pointerType!=='mouse')return;
   if(e.pointerId===_aimPid){_aimPrev=null;_aimPid=-1;}
-  try{aimOverlay.releasePointerCapture(e.pointerId);}catch(_){}
 });
-
-aimOverlay.addEventListener('pointercancel',e=>{
+window.addEventListener('pointercancel',e=>{
+  if(e.pointerType!=='mouse')return;
   _aimPrev=null;_aimPid=-1;shootCharging=false;
-  try{aimOverlay.releasePointerCapture(e.pointerId);}catch(_){}
 });
 
 // ── Audio ────────────────────────────────────────────────────────────
