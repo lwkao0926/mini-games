@@ -729,6 +729,8 @@ function tick(){
     const cb=getCueBall();
     if(cb&&isAiming)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
   }
+  // Hide aim button while balls are rolling; show when stopped
+  modeBtn.style.display=(mode==='orbit'&&ballsMoving)?'none':'';
   updateCamera();
   renderer.render(scene,camera);
 }
