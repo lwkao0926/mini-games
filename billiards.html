@@ -488,7 +488,7 @@ function setMode(m){
     updateCamera();
   }
 }
-modeBtn.addEventListener('click',()=>{if(!gameActive)return;setMode(mode==='orbit'?'aim':'orbit');});
+modeBtn.addEventListener('click',()=>{if(!gameActive||ballsMoving)return;setMode(mode==='orbit'?'aim':'orbit');});
 
 // ── Raycasting ──────────────────────────────────────────────────────
 const _ray=new THREE.Raycaster();
@@ -556,7 +556,7 @@ function endAim(){
 }
 
 function shoot(){
-  if(!isAiming||aimPower<.04)return;
+  if(!isAiming||aimPower<.04||ballsMoving)return;
   const cb=getCueBall();if(!cb||cb.pocketed)return;
   const PSCALE=6.5;
   const speed=aimPower*PSCALE;
@@ -582,7 +582,7 @@ let _aimPrev=null,_aimPid=-1;
 const aimOverlay=document.getElementById('aim-overlay');
 
 aimOverlay.addEventListener('pointerdown',e=>{
-  if(!gameActive||ballsMoving)return;
+  if(!gameActive)return;
   e.preventDefault();
   aimOverlay.setPointerCapture(e.pointerId);
   _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
@@ -592,7 +592,7 @@ aimOverlay.addEventListener('pointerdown',e=>{
 },{passive:false});
 
 aimOverlay.addEventListener('pointermove',e=>{
-  if(!gameActive||ballsMoving||e.pointerId!==_aimPid||!_aimPrev)return;
+  if(!gameActive||e.pointerId!==_aimPid||!_aimPrev)return;
   e.preventDefault();
   const dx=e.clientX-_aimPrev.x,dy=e.clientY-_aimPrev.y;
   camTheta-=dx*.008;aimAngle=camTheta;
