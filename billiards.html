@@ -482,7 +482,6 @@ function setMode(m){
   }
 }
 modeBtn.addEventListener('click',()=>{if(!gameActive)return;setMode(mode==='orbit'?'aim':'orbit');});
-modeBtn.addEventListener('touchend',e=>{e.preventDefault();if(!gameActive)return;setMode(mode==='orbit'?'aim':'orbit');},{passive:false});
 
 // ── Raycasting ──────────────────────────────────────────────────────
 const _ray=new THREE.Raycaster();
@@ -566,10 +565,12 @@ function shoot(){
   ballsMoving=true;shots++;sfx('shoot');endAim();setMode('orbit');
 }
 
-// ── Pointer handlers (window-level) ──────────────────────────────────
+// ── Pointer/Touch handlers ────────────────────────────────────────────
 let _aimPrev=null,_aimPid=-1;
 
+// Desktop (mouse) – pointer events on window
 window.addEventListener('pointerdown',e=>{
+  if(e.pointerType!=='mouse')return;
   if(!gameActive)return;
   if(e.target.closest('button,#spin-cvs,#shoot-btn'))return;
   e.preventDefault();
@@ -581,9 +582,9 @@ window.addEventListener('pointerdown',e=>{
   }
 },{passive:false});
 window.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse')return;
   if(!gameActive||mode!=='aim'||ballsMoving)return;
   e.preventDefault();
-  // If no active pointer OR different pointer arrives, take it over (handles stale/missed pointerdown)
   if(_aimPrev===null||_aimPid!==e.pointerId){
     _aimPrev={x:e.clientX,y:e.clientY};_aimPid=e.pointerId;
     return;
@@ -597,10 +598,47 @@ window.addEventListener('pointermove',e=>{
   _aimPrev={x:e.clientX,y:e.clientY};
 },{passive:false});
 window.addEventListener('pointerup',e=>{
+  if(e.pointerType!=='mouse')return;
   if(e.pointerId===_aimPid){_aimPrev=null;_aimPid=-1;}
 });
 window.addEventListener('pointercancel',e=>{
+  if(e.pointerType!=='mouse')return;
   if(e.pointerId===_aimPid){_aimPrev=null;_aimPid=-1;shootCharging=false;}
+});
+
+// Mobile (touch) – touch events directly on the 3D canvas (most reliable on iOS Safari)
+renderer.domElement.addEventListener('touchstart',e=>{
+  if(!gameActive)return;
+  e.preventDefault();
+  if(mode==='aim'&&!ballsMoving){
+    const t=e.changedTouches[0];
+    _aimPrev={x:t.clientX,y:t.clientY};_aimPid=t.identifier;
+    isAiming=true;
+    const cb=getCueBall();
+    if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+  }
+},{passive:false});
+renderer.domElement.addEventListener('touchmove',e=>{
+  if(!gameActive||mode!=='aim'||ballsMoving)return;
+  e.preventDefault();
+  const touch=Array.from(e.changedTouches).find(t=>t.identifier===_aimPid)||e.changedTouches[0];
+  if(!_aimPrev){
+    _aimPrev={x:touch.clientX,y:touch.clientY};_aimPid=touch.identifier;
+    return;
+  }
+  const dx=touch.clientX-_aimPrev.x,dy=touch.clientY-_aimPrev.y;
+  camTheta-=dx*.008;aimAngle=camTheta;
+  camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
+  const cb=getCueBall();
+  if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
+  updateCamera();
+  _aimPrev={x:touch.clientX,y:touch.clientY};
+},{passive:false});
+renderer.domElement.addEventListener('touchend',e=>{
+  _aimPrev=null;_aimPid=-1;
+});
+renderer.domElement.addEventListener('touchcancel',e=>{
+  _aimPrev=null;_aimPid=-1;shootCharging=false;
 });
 
 // ── Audio ────────────────────────────────────────────────────────────
