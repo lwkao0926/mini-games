@@ -133,7 +133,7 @@ canvas{display:block;}
   <button id="go-btn">再玩一次</button>
 </div>
 
-<div id="mode-badge" class="orbit">旋轉視角</div>
+<div id="mode-badge" class="orbit">俯瞰</div>
 <div id="hud"><div style="font-size:.72em;color:#aaa;letter-spacing:.08em;">已入袋</div><div id="hud-score">0 / 15</div></div>
 <div id="pw-wrap"><div id="pw-bg"><div id="pw-fill"></div></div><div id="pw-lbl">0%</div></div>
 <div id="spin-wrap"><div id="spin-lbl">擊球點</div><canvas id="spin-cvs" width="84" height="84"></canvas></div>
@@ -456,15 +456,16 @@ shootBtnEl.addEventListener('pointercancel',()=>releaseCharge());
 function setMode(m){
   mode=m;orbitLast=null;shootCharging=false;
   if(m==='orbit'){
-    modeBadge.textContent='旋轉視角';modeBadge.className='orbit';
+    camTheta=0;camPhi=0.38;
+    modeBadge.textContent='俯瞰';modeBadge.className='orbit';
     modeBtn.textContent='🎱 進入瞄準';modeBtn.className='to-aim';
     pwWrap.style.display='none';spinWrap.style.display='none';
     shootBtnEl.style.display='none';
-    hintEl.textContent='拖曳旋轉視角・點「進入瞄準」後出桿';
+    hintEl.textContent='點「進入瞄準」後出桿';
     endAim();updateCamera();
   } else {
     modeBadge.textContent='瞄準模式';modeBadge.className='aim';
-    modeBtn.textContent='↩ 旋轉視角';modeBtn.className='to-orbit';
+    modeBtn.textContent='↩ 俯瞰';modeBtn.className='to-orbit';
     pwWrap.style.display='block';spinWrap.style.display='block';
     shootBtnEl.style.display='flex';
     hintEl.textContent='拖曳調整瞄準・左側按鈕蓄力出桿';
@@ -587,11 +588,9 @@ window.addEventListener('pointermove',e=>{
     camPhi=Math.max(.40,Math.min(1.35,camPhi+dy*.005));
     const cb=getCueBall();
     if(cb)showAimDisplay(Math.sin(aimAngle),Math.cos(aimAngle),cb.body.position);
-  } else {
-    camTheta-=dx*.007;
-    camPhi=Math.max(.22,Math.min(1.38,camPhi-dy*.006));
+    updateCamera();
   }
-  updateCamera();orbitLast={x:e.clientX,y:e.clientY,pid:e.pointerId};
+  orbitLast={x:e.clientX,y:e.clientY,pid:e.pointerId};
 },{passive:false});
 window.addEventListener('pointerup',e=>{
   if(orbitLast&&e.pointerId===orbitLast.pid)orbitLast=null;
